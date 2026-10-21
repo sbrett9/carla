@@ -3,6 +3,9 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using CarlaNet.Recording;
+using CarlaNet.Types.Geom;
+
+using ActorId = uint;
 
 namespace CarlaNet.CoSim;
 
@@ -21,6 +24,17 @@ namespace CarlaNet.CoSim;
 /// the affiliation of the vehicle's population (<see cref="LiveTrackOptions.AffiliationOf"/>), asked of
 /// SUMO once per vehicle type and only where the options map any population. A vehicle with no body on
 /// the frame is in no sample.</para>
+///
+/// <para><b>In view of a followed camera.</b> While a camera is followed (<see cref="Follow"/>), each
+/// sample's records are marked against that camera as a recorder marks a capture's: against the draw
+/// distance the frame's render set carries (<see cref="DrawDistanceCheck.Mark"/>), then where each box
+/// falls in the camera's picture (<see cref="BoxProjector.Mark(IReadOnlyList{VehicleTelemetry}, in PinholeCamera)"/>),
+/// from the camera's pose in the frame's own snapshot and the image size and field of view it was
+/// spawned with. A vehicle is in view where its box falls wholly or partly in the picture and it is not
+/// wholly beyond the draw distance; a vehicle hidden behind another is in view. The marking decides each
+/// event's in-view flag and adds nothing to the event. A frame whose snapshot does not hold the followed
+/// camera is sampled with no flags and counted (<see cref="SamplesCameraMissing"/>). The camera is never
+/// registered with the session, so following it changes nothing about which vehicles get a body.</para>
 ///
 /// <para><b>Which frames.</b> The newest frame of each interval of <see cref="TicksPerSample"/> world
 /// ticks, counted from the session's first tick: tick index <c>i</c> where <c>(i + 1)</c> is a multiple
@@ -52,7 +66,8 @@ public sealed class LiveTrackFeed : ISumoStepObserver
     private readonly Dictionary<string, string> _populationOf = new(StringComparer.Ordinal);
     private readonly Queue<Sample> _waiting = new();
     private readonly object _gate = new();
-    private long _samples, _framesUnpaired, _bodiesMissing, _samplesDropped;
+    private long _samples, _framesUnpaired, _bodiesMissing, _samplesCameraMissing, _samplesDropped;
+    private (ActorId Camera, CameraOptics Optics)? _followed;
 
     /// <param name="options">What the feed sends.</param>
     /// <param name="world">The world whose frames are sampled.</param>
@@ -125,6 +140,85 @@ public sealed class LiveTrackFeed : ISumoStepObserver
         }
     }
 
+    /// <summary>
+    /// Samples taken while a camera was followed whose frame's snapshot did not hold it -- the camera was
+    /// destroyed, or had not yet reached the client -- each sent with no in-view flags.
+    /// </summary>
+    public long SamplesCameraMissing
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _samplesCameraMissing;
+            }
+        }
+    }
+
+    /// <summary>The camera followed now, or null where none is.</summary>
+    public ActorId? FollowedCamera
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _followed?.Camera;
+            }
+        }
+    }
+
+    /// <summary>The image size and field of view of the camera followed now, or null where none is.</summary>
+    public CameraOptics? FollowedOptics
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _followed?.Optics;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Follow a camera from the next sampled frame on: each sample says which of its vehicles are in the
+    /// camera's picture. Following another camera stops following the last.
+    /// </summary>
+    /// <param name="camera">The camera's actor id, spawned by any client.</param>
+    /// <remarks>
+    /// The camera's image size and field of view are read from its attributes now, in one round trip, and
+    /// never again: a camera's attributes are fixed at its spawn. Its pose is read on each sampled frame
+    /// from that frame's snapshot, so a camera flown or orbited between frames is followed wherever it
+    /// goes. Called between advances, from the thread that advances the session, as every other call on
+    /// it is. Unlike <see cref="SumoDriveSession.AddCamera"/>, it changes nothing about which vehicles get
+    /// a body.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The world has no such actor, or the actor is not a camera.</exception>
+    public void Follow(ActorId camera)
+    {
+        CameraOptics optics = _world.DescribeCamera(camera)
+                              ?? throw new ArgumentException(
+                                  $"Actor {camera} is not a camera the world knows: it has no image_size_x, "
+                                  + "image_size_y and fov to project a picture with.", nameof(camera));
+        lock (_gate)
+        {
+            _followed = (camera, optics);
+        }
+    }
+
+    /// <summary>
+    /// Stop following a camera, from the next sampled frame on: samples carry no in-view flags again.
+    /// Answers whether a camera was followed.
+    /// </summary>
+    public bool Unfollow()
+    {
+        lock (_gate)
+        {
+            bool was = _followed is not null;
+            _followed = null;
+            return was;
+        }
+    }
+
     /// <summary>Samples dropped untaken because <see cref="Capacity"/> others were already waiting.</summary>
     public long SamplesDropped
     {
@@ -160,11 +254,14 @@ public sealed class LiveTrackFeed : ISumoStepObserver
     /// <c>sim_time_s</c>.</item>
     /// <item><c>time_utc</c>: its civil instant in UTC, spelled as each event's <c>time</c>.</item>
     /// <item><c>in_window</c>: false for a frame of the prewarm, before the window opens.</item>
-    /// <item><c>camera</c>: <c>none</c>, no camera being followed.</item>
-    /// <item><c>camera_id</c>: null.</item>
+    /// <item><c>camera</c>: <c>none</c> where no camera was followed, <c>followed</c> where the followed
+    /// camera's pose was read from the frame's snapshot, and <c>missing</c> where the snapshot did not hold
+    /// it.</item>
+    /// <item><c>camera_id</c>: the followed camera's actor id, or null where none was followed.</item>
     /// <item><c>events</c>: one object per body the frame drew, in the order of the frame's truth records:
-    /// <c>sumo_id</c>, the vehicle; <c>in_view</c>, null; and <c>xml</c>, its event, one line with no
-    /// XML declaration, to send as one UDP datagram.</item>
+    /// <c>sumo_id</c>, the vehicle; <c>in_view</c>, true or false where <c>camera</c> is
+    /// <c>followed</c>, and null otherwise; and <c>xml</c>, its event, one line with no XML declaration,
+    /// to send as one UDP datagram.</item>
     /// </list>
     /// </remarks>
     public string TakeSamplesJson()
@@ -189,14 +286,30 @@ public sealed class LiveTrackFeed : ISumoStepObserver
                                    skipInputValidation: true);
                 json.WriteString("time_utc", CotWriter.Timestamp(sample.StampedUtc));
                 json.WriteBoolean("in_window", sample.InWindow);
-                json.WriteString("camera", "none");
-                json.WriteNull("camera_id");
+                json.WriteString("camera", sample.Camera);
+                if (sample.CameraId is { } cameraId)
+                {
+                    json.WriteNumber("camera_id", cameraId);
+                }
+                else
+                {
+                    json.WriteNull("camera_id");
+                }
+
                 json.WriteStartArray("events");
                 foreach (Event vehicle in sample.Events)
                 {
                     json.WriteStartObject();
                     json.WriteString("sumo_id", vehicle.SumoId);
-                    json.WriteNull("in_view");
+                    if (vehicle.InView is { } inView)
+                    {
+                        json.WriteBoolean("in_view", inView);
+                    }
+                    else
+                    {
+                        json.WriteNull("in_view");
+                    }
+
                     json.WriteString("xml", vehicle.Xml);
                     json.WriteEndObject();
                 }
@@ -225,7 +338,13 @@ public sealed class LiveTrackFeed : ISumoStepObserver
             return;
         }
 
-        Sample? sample = Take(frame, out int missing);
+        (ActorId Camera, CameraOptics Optics)? followed;
+        lock (_gate)
+        {
+            followed = _followed;
+        }
+
+        Sample? sample = Take(frame, followed, out int missing);
         lock (_gate)
         {
             _bodiesMissing += missing;
@@ -236,6 +355,11 @@ public sealed class LiveTrackFeed : ISumoStepObserver
             }
 
             _samples++;
+            if (sample.Camera == CameraMissing)
+            {
+                _samplesCameraMissing++;
+            }
+
             if (_waiting.Count == Capacity)
             {
                 _waiting.Dequeue();
@@ -252,7 +376,7 @@ public sealed class LiveTrackFeed : ISumoStepObserver
     }
 
     /// <summary>The sample a frame makes, or null where its truth is not to be had.</summary>
-    private Sample? Take(RenderedFrameRecord frame, out int missing)
+    private Sample? Take(RenderedFrameRecord frame, (ActorId Camera, CameraOptics Optics)? followed, out int missing)
     {
         missing = 0;
         if (frame.RenderSet is not { } renderSet || frame.Illumination?.CivilInstant is not { } civil)
@@ -278,6 +402,26 @@ public sealed class LiveTrackFeed : ISumoStepObserver
         }
 
         IReadOnlyList<VehicleTelemetry> records = renderSet.Select(truth, out missing);
+
+        // Marked as a recorder marks a capture of the camera: the draw distance from the camera's pose
+        // first, then the picture. The box itself is not sent, so the records are projected without the
+        // georeference its corners are converted with.
+        string camera = CameraNone;
+        bool marked = false;
+        if (followed is { } watched)
+        {
+            camera = CameraMissing;
+            if (_world.ObservedTransformAt(watched.Camera, frame.Frame) is { } pose)
+            {
+                camera = CameraFollowed;
+                marked = true;
+                records = DrawDistanceCheck.Mark(records, pose.Location, renderSet.DrawDistanceMetres, out _, out _);
+                records = BoxProjector.Mark(records, new PinholeCamera(pose, watched.Optics.ImageWidth,
+                                                                       watched.Optics.ImageHeight,
+                                                                       watched.Optics.HorizontalFovDegrees));
+            }
+        }
+
         DateTime stamped = civil.UtcDateTime;
         var events = new List<Event>(records.Count);
         foreach (VehicleTelemetry record in records)
@@ -286,12 +430,16 @@ public sealed class LiveTrackFeed : ISumoStepObserver
             string affiliation = _options.AffiliationByPopulation.Count == 0
                 ? _options.Affiliation
                 : _options.AffiliationOf(PopulationOf(vehicle.VehicleTypeId));
-            events.Add(new Event(vehicle.SumoId,
+            bool? inView = marked
+                ? (record.InFrame is InFrame.Wholly or InFrame.Partly) && record.DrawDistance != DrawDistanceReach.Beyond
+                : null;
+            events.Add(new Event(vehicle.SumoId, inView,
                                  CotWriter.StreamEvent(record, affiliation, _options.UidPrefix, stamped,
                                                        _options.StaleSeconds)));
         }
 
-        return new Sample(frame.Frame, frame.SimulatedTimeSeconds, stamped, frame.InWindow, events);
+        return new Sample(frame.Frame, frame.SimulatedTimeSeconds, stamped, frame.InWindow, camera,
+                          followed?.Camera, events);
     }
 
     /// <summary>
@@ -315,8 +463,12 @@ public sealed class LiveTrackFeed : ISumoStepObserver
         return population;
     }
 
-    private sealed record Event(string SumoId, string Xml);
+    private const string CameraNone = "none";
+    private const string CameraFollowed = "followed";
+    private const string CameraMissing = "missing";
+
+    private sealed record Event(string SumoId, bool? InView, string Xml);
 
     private sealed record Sample(ulong Frame, double SimulatedSeconds, DateTime StampedUtc, bool InWindow,
-                                 IReadOnlyList<Event> Events);
+                                 string Camera, ActorId? CameraId, IReadOnlyList<Event> Events);
 }

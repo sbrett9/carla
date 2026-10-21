@@ -242,7 +242,7 @@ public sealed class SumoDriveSessionLiveTrackTests
         HashSet<string> drawn = [.. watcher.Frames.Values.SelectMany(frame => frame.RenderSet!.ByActor.Values)
                                     .Select(vehicle => vehicle.SumoId)];
         Assert.Contains("turner", sampled);
-        Assert.True(passes.Any(pass => pass.Population > pass.Admitted));
+        Assert.Contains(passes, pass => pass.Population > pass.Admitted);
         Assert.DoesNotContain("goer", drawn);
         Assert.DoesNotContain("changer", drawn);
         Assert.Subset(drawn, sampled);

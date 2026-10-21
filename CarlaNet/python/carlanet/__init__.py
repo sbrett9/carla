@@ -2609,11 +2609,24 @@ class World:
         returns the samples completed since the last call, oldest first, as a JSON array, and the
         caller sends each event's `xml` as one UDP datagram. Each sample is an object with `frame`,
         `sim_time_s`, `time_utc` (spelled as each event's `time`), `in_window` (false on a prewarm
-        frame), `camera` ('none'), `camera_id` (null) and `events`, each event an object with
-        `sumo_id`, `in_view` (null) and `xml`. Up to 64 samples wait to be taken; beyond that the
-        oldest is dropped. `session.LiveTrack.TicksPerSample` and `SampleIntervalSeconds` give the
-        rate in force; `Samples`, `FramesUnpaired` (sampled frames whose truth was not to be had, which
-        make no sample), `BodiesMissing` and `SamplesDropped` what it counted.
+        frame), `camera`, `camera_id` and `events`, each event an object with `sumo_id`, `in_view` and
+        `xml`. Up to 64 samples wait to be taken; beyond that the oldest is dropped.
+
+        `session.LiveTrack.Follow(camera_id)` follows a live camera, spawned by any client, from the
+        next sampled frame on, reading its image size and field of view once, now; it raises for an
+        actor that is not a camera, and `Unfollow()` stops. Following changes nothing about which
+        vehicles get a body: the camera is not registered with `session.AddCamera`. While a camera is
+        followed, each sample's `camera` is 'followed' where the frame's snapshot holds the camera,
+        with every event's `in_view` true where the vehicle's box falls wholly or partly in the
+        camera's picture and the vehicle is not wholly beyond a draw distance in force -- the test a
+        capture's `in_frame` records, hidden vehicles included -- and false otherwise; and 'missing'
+        where the snapshot does not hold it, with every `in_view` null. `camera_id` is the followed
+        camera's actor id. With no camera followed, `camera` is 'none', `camera_id` null and every
+        `in_view` null. The flag adds nothing to the event itself. `session.LiveTrack.TicksPerSample`
+        and `SampleIntervalSeconds` give the rate in force, `FollowedCamera` and `FollowedOptics` the
+        camera followed, and `Samples`, `FramesUnpaired` (sampled frames whose truth was not to be had,
+        which make no sample), `BodiesMissing`, `SamplesCameraMissing` and `SamplesDropped` what it
+        counted.
 
         `road_layer_visible` and `signal_layer_visible` decide what is in frame. Both are off,
         because the imagery this mode produces is of the photogrammetry: the generated road mesh is

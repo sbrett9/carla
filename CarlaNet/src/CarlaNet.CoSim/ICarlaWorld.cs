@@ -283,7 +283,7 @@ public interface ICarlaWorld
     /// holds that one -- not a round trip. A render set that follows the cameras reads each registered
     /// camera's pose here on the last frame the session rendered, which in synchronous mode is also the
     /// newest frame, named by its number so that a camera flown from another thread is read where the
-    /// frame had it.
+    /// frame had it; a live track reads the camera it follows here on each frame it samples.
     /// </remarks>
     Transform? ObservedTransformAt(ActorId actor, ulong frame);
 
@@ -292,8 +292,9 @@ public interface ICarlaWorld
     /// <see langword="null"/> where the actor is unknown or is not a camera.
     /// </summary>
     /// <remarks>
-    /// One round trip, asked once when a camera is registered with the session and never on the tick
-    /// thread's schedule: a camera's attributes are fixed when it is spawned.
+    /// One round trip, asked once when a camera is registered with the session or followed by its live
+    /// track, and never on the tick thread's schedule: a camera's attributes are fixed when it is
+    /// spawned.
     /// </remarks>
     CameraOptics? DescribeCamera(ActorId camera);
 
