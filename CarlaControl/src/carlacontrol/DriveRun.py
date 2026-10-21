@@ -83,6 +83,8 @@ class DriveRun:
         self.run_id = f"run-{datetime.now(UTC):%Y%m%d-%H%M%S}"
 
         try:
+            if self.cot is not None:
+                self.cot.connect(self.world)
             self.session = self._start_session(sun, sumo)
             if self.session is None:
                 return 1
@@ -257,6 +259,8 @@ class DriveRun:
             # before its first step, with everything given back on the way out.
             logger.error("%s", failure)
             return 1
+        if self.cot is not None:
+            self.cot.offer(self.free.rig.camera)
         return None
 
     def _record_from_the_fixed_camera(self) -> int | None:
@@ -279,6 +283,8 @@ class DriveRun:
                 centre = self.aim.centre()
                 logger.info("aimed at %d rendered vehicles", self.aim.count)
         self.camera = DriveCamera.spawn_camera(world, args, centre)
+        if self.cot is not None:
+            self.cot.offer(self.camera)
         self.depth = DriveCamera.spawn_depth_camera(world, args, self.camera,
                                                     DriveCamera.depth_range_m())
         if session.RunManifest is not None:

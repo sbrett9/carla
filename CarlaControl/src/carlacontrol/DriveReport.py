@@ -46,7 +46,9 @@ class DriveReport:
         track = feed.track
         ticks = int(track.TicksPerSample)
         every = "every world tick" if ticks == 1 else f"every {ticks} world ticks"
-        return (f"to {feed.target()}, ttl {feed.ttl}: every vehicle with a body, one datagram each, on "
+        sent = (f"only the vehicles in camera {feed.camera_name}'s picture" if feed.in_view
+                else "every vehicle with a body")
+        return (f"to {feed.target()}, ttl {feed.ttl}: {sent}, one datagram each, on "
                 f"the newest frame of {every} ({track.SampleIntervalSeconds:.2f} s), the prewarm's "
                 f"included; stale {feed.stale_s:g} s after its stamp; uid "
                 f"{feed.uid_prefix}-SUMO-<SUMO id>; {feed.describe_convention()}")

@@ -215,6 +215,18 @@ beside `--scenario`, with `--cot-affiliation` for any population it does not nam
 counted and said, and the drive goes on. The feed writes no file: a capture's sidecars and
 `--world-truth-track` record what it sends.
 
+`--cot-emit in-view --cot-camera NAME` sends only the vehicles in the picture of the live camera named
+NAME, compared without regard to case (a carla-camera-follower's `--sensor-id`, or this drive's
+`--camera-name`), on each sampled frame: a body whose box falls wholly or partly in the picture, the
+test a capture's `in_frame` records, and not wholly beyond a `--draw-distance`. A vehicle hidden behind
+another is in view. It filters the feed and nothing else: which vehicles get a body is unchanged. While
+no live camera holds the name nothing is sent, and the log says when the camera goes and when it is
+found again. To watch the gate of the Bahonar port from a camera of its own and send what it sees:
+
+    carla-camera-follower --sensor-id Gate_Orbit_1 --pattern orbit --orbit-centre 1998.4 -1035.0
+    carla-drive --scenario ... --world-package ... --epoch ... --no-record --real-time-factor 1.0 \\
+        --steps 0 --cot-udp 239.2.3.1:6969 --cot-emit in-view --cot-camera Gate_Orbit_1
+
 Every still is named after its camera and its frame's simulated civil time at the epoch's offset,
 `<camera name>_<yyyyMMdd_HHmmss.fff>.png` and `.xml`, and the camera's platform track carries the
 name as its callsign. `--camera-name` names the camera, fixed or
@@ -264,6 +276,8 @@ FEED_DEFAULTS = {
     "--cot-affiliation": DriveCotFeed.DEFAULT_AFFILIATION,
     "--cot-display-convention": None,
     "--cot-uid-prefix": DriveCotFeed.DEFAULT_UID_PREFIX,
+    "--cot-emit": DriveCotFeed.DEFAULT_EMIT,
+    "--cot-camera": None,
 }
 
 
@@ -436,6 +450,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="with --cot-udp: what every event's uid begins with, as "
                              "<P>-SUMO-<SUMO id>; no whitespace (default CARLA-TRUTH, the truth "
                              "sidecars' own)")
+    parser.add_argument("--cot-emit", choices=(DriveCotFeed.ALL, DriveCotFeed.IN_VIEW), default=None,
+                        help="with --cot-udp: which vehicles are sent: 'all' (default) every vehicle "
+                             "with a body; 'in-view' only those in the picture of the --cot-camera "
+                             "camera, wholly or partly, and not wholly beyond a --draw-distance. It "
+                             "filters the feed and changes nothing about which vehicles get a body")
+    parser.add_argument("--cot-camera", default=None, metavar="NAME",
+                        help="with --cot-emit in-view: the name of the live camera whose picture the "
+                             "feed keeps, compared without regard to case: a carla-camera-follower's "
+                             "--sensor-id, this drive's --camera-name, or a server's Camera_<n>. "
+                             "Looked for before the drive starts and after each step while none holds "
+                             "the name; nothing is sent while none does")
 
     parser.add_argument("--show-road-mesh", action="store_true",
                         help="draw the generated road surface. Hidden by default: it is a flat gray "
@@ -561,6 +586,16 @@ def _refuse_unusable_feed_options(parser: argparse.ArgumentParser, args: argpars
         refused = DriveCotFeed.uid_prefix_problem(args.cot_uid_prefix)
         if refused is not None:
             problems.append(f"--cot-uid-prefix {refused}")
+    # Not held to the camera-name rule, which refuses the server's own Camera_<n>: any name a live
+    # camera holds can be followed.
+    if args.cot_camera is not None and not args.cot_camera:
+        problems.append("--cot-camera names no camera")
+    if args.cot_emit == DriveCotFeed.IN_VIEW and args.cot_camera is None:
+        problems.append("--cot-emit in-view needs --cot-camera NAME, the live camera whose picture it "
+                        "keeps")
+    if args.cot_emit != DriveCotFeed.IN_VIEW and args.cot_camera:
+        problems.append("--cot-camera needs --cot-emit in-view: every vehicle is sent otherwise, and "
+                        "no camera decides which")
     if problems:
         parser.error("; ".join(problems))
     for option, default in FEED_DEFAULTS.items():

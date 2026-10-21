@@ -39,7 +39,14 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 sys.path.insert(0, str(_REPO / "CarlaControl" / "test"))
 
-from DriveFakes import FakeCamera, FakeClient, FakeEmitter, FakeSession, FakeWorld, sample  # noqa: E402
+from DriveFakes import (  # noqa: E402
+    FakeCamera,
+    FakeClient,
+    FakeEmitter,
+    FakeSession,
+    FakeWorld,
+    sample,
+)
 
 BAHONAR = _REPO / "CarlaControl" / "Examples" / "Scenarios" / "Bahonar"
 BAHONAR_CONFIG = (BAHONAR / "Shahid_Bahonar_Port_PatternOfLife"

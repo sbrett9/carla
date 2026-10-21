@@ -345,6 +345,57 @@ carla-camera-follower --sensor-id Underpass_Stare_1 --stare-look-at -171.6 -672.
 That camera stands 150 m south of the spot and 150 m up.\
 It looks north at the spot.
 
+### Worked example: a live Cursor-on-Target feed of what the orbit sees
+
+`carla-drive --cot-udp HOST:PORT` sends a live Cursor-on-Target (CoT) feed while it drives, one event per UDP datagram.\
+Each event is the one a capture of the frame writes for the vehicle in its truth sidecar, less what depends on a picture.\
+[CoT telemetry stream](../Schemas/CoT_Telemetry_Stream.md) describes the datagrams.\
+With `--cot-emit in-view --cot-camera NAME`, the drive sends only the vehicles in the picture of the live camera that holds NAME on the server.\
+The follower's `--sensor-id` gives its camera that name.
+
+This example sends the feed of the Arapahoe drive above to a receiver on this machine, at port 6969.
+
+1. Start the server and the follower's orbit, as in steps 1 and 2 above.\
+   The follower's camera is named `Underpass_Orbit_1`.
+
+2. To send every vehicle with a body, start the drive with `--cot-udp`:
+
+```sh
+carla-drive \
+    --scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg \
+    --world-package Scenarios/Arapahoe/Arapahoe_I25.cwp \
+    --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json \
+    --no-record --real-time-factor 1.0 --steps 0 --cot-udp 127.0.0.1:6969
+```
+
+The drive's log names the target and how often it samples: every 20 world ticks, 1.00 s, at the default `--cot-hz 1`.\
+Each sample is the newest frame of its interval.\
+The log also names the display convention, `<scenario>.display.json` beside `--scenario`.\
+The Arapahoe scenario has none, so every vehicle takes `--cot-affiliation`, `n` by default.
+
+3. To send only what the orbit sees, stop the drive with Ctrl+C.\
+   Start it again with two more options:
+
+```sh
+carla-drive \
+    --scenario Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell/Arapahoe_I25_UnderpassDwell.sumocfg \
+    --world-package Scenarios/Arapahoe/Arapahoe_I25.cwp \
+    --epoch Scenarios/Arapahoe/Arapahoe_I25_UnderpassDwell.scenario.json \
+    --no-record --real-time-factor 1.0 --steps 0 --cot-udp 127.0.0.1:6969 \
+    --cot-emit in-view --cot-camera Underpass_Orbit_1
+```
+
+The drive looks for the live camera named `Underpass_Orbit_1` before it starts, compared without regard to case, and logs its actor id, picture size and field of view once it follows it.\
+A vehicle is in view when its box falls wholly or partly in the camera's picture, the test a capture's `in_frame` records, and it is not wholly beyond a `--draw-distance`.\
+A vehicle hidden behind another is in view.\
+The mode filters the feed and nothing else: the camera is not registered with the drive's session, so it changes nothing about which vehicles get a body.
+
+Close the follower while the drive runs, and the drive logs that the camera has gone.\
+It sends nothing until a live camera holds the name again.\
+Start the follower again with the same `--sensor-id`, and the drive logs that it follows the new camera and goes on sending.\
+When the drive ends, it says how many samples it sent nothing for.\
+To follow the drive's own camera instead, leave out `--no-record` and give `--cot-camera` the drive's `--camera-name`.
+
 ### Flying a camera to find a view: `carla-free-camera`
 
 `carla-free-camera` flies a camera of your own around a running world, with flight controls and a heads-up display.\

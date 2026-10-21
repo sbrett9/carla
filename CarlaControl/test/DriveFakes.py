@@ -9,6 +9,14 @@ The session advances simulated time by one SUMO step of 1.0 s per `Advance()` an
 track sample per step, of the step's newest frame, holding one event per vehicle it is told is drawn.
 It answers false on the step a test says the scenario ends on, and raises on the step a test names,
 after that step's sample is complete. Nothing here opens a socket.
+
+The world holds actors any client spawned, cameras and others, each under the name it holds on the
+server; `get_actor_ids` reads them as the latest snapshot holds them, and `get_actors` records the ids
+it is asked about. A live track follows a camera of the world, reading its optics at `Follow`, and
+refuses any other actor with the refusal it is given, as the session raises `ArgumentException`. While
+it follows one, each sample says the camera was `followed`, its events flagged in view where the
+session is told they are, or `missing` where the world no longer holds it. A test runs its own changes
+to the world at the start of the steps it names, before that step's sample.
 """
 from __future__ import annotations
 
@@ -68,11 +76,37 @@ class FakeEmitter:
             FakeEmitter.timeline.append(("socket closed",))
 
 
-class FakeLiveTrack:
-    """A session's live track: the samples waiting to be taken, and the counters it reports."""
+class FakeActor:
+    """An actor in the world: a camera with its optics, or anything else, under the name it holds."""
 
-    def __init__(self, timeline: list) -> None:
+    def __init__(self, world: FakeWorld, actor_id: int, name: str, type_id: str = "sensor.camera.rgb",
+                 optics: tuple[int, int, float] = (1280, 720, 90.0)) -> None:
+        self.world = world
+        self.id = actor_id
+        self.name = name
+        self.type_id = type_id
+        self.optics = optics
+        self.destroyed = False
+
+    def destroy(self) -> bool:
+        self.destroyed = True
+        self.world.actors.pop(self.id, None)
+        return True
+
+
+class FakeLiveTrack:
+    """A session's live track: the samples waiting to be taken, the camera it follows, and the counters
+    it reports."""
+
+    def __init__(self, timeline: list, world: FakeWorld | None = None,
+                 refusal: type[Exception] = ValueError) -> None:
         self.timeline = timeline
+        self.world = world
+        self.refusal = refusal
+        self.FollowedCamera: int | None = None
+        self.FollowedOptics = None
+        self.follows: list[int] = []
+        self.unfollows = 0
         self.waiting: list[dict] = []
         self.TicksPerSample = TICKS_PER_STEP
         self.SampleIntervalSeconds = TICKS_PER_STEP * 0.05
@@ -84,7 +118,26 @@ class FakeLiveTrack:
 
     def complete(self, completed: dict) -> None:
         self.Samples += 1
+        if completed["camera"] == "missing":
+            self.SamplesCameraMissing += 1
         self.waiting.append(completed)
+
+    def Follow(self, actor_id: int) -> None:  # noqa: N802 -- the .NET member name
+        actor = self.world.actors.get(actor_id) if self.world is not None else None
+        if actor is None or not actor.type_id.startswith("sensor.camera."):
+            raise self.refusal(f"Actor {actor_id} is not a camera the world knows: it has no "
+                               "image_size_x, image_size_y and fov to project a picture with.")
+        self.follows.append(actor_id)
+        width, height, fov = actor.optics
+        self.FollowedCamera = actor_id
+        self.FollowedOptics = SimpleNamespace(ImageWidth=width, ImageHeight=height,
+                                              HorizontalFovDegrees=fov)
+
+    def Unfollow(self) -> bool:  # noqa: N802 -- the .NET member name
+        self.unfollows += 1
+        was = self.FollowedCamera is not None
+        self.FollowedCamera = self.FollowedOptics = None
+        return was
 
     def TakeSamplesJson(self) -> str:  # noqa: N802 -- the .NET member name
         taken, self.waiting = self.waiting, []
@@ -109,19 +162,26 @@ def _report() -> SimpleNamespace:
 class FakeSession:
     """A SUMO drive session whose first rendered step starts at `first`, one 1.0 s step per `Advance()`.
 
-    `drawn` are the vehicles every sample holds. `ends_on` is the step (counted from 1) whose
-    `Advance()` answers false; `raises_on` the step that raises `raising` once its sample is complete.
+    `drawn` are the vehicles every sample holds, and `in_view` those a followed camera's picture
+    holds. `ends_on` is the step (counted from 1) whose `Advance()` answers false; `raises_on` the step
+    that raises `raising` once its sample is complete. `before_step` maps a step to what is done to the
+    world as it starts.
     """
 
     def __init__(self, timeline: list, *, first: float = 100.0, window: float | None = None,
-                 drawn=("v1", "v2"), ends_on: int | None = None, raises_on: int | None = None,
-                 raising: BaseException | None = None, live_track: bool = True) -> None:
+                 drawn=("v1", "v2"), in_view=("v1",), ends_on: int | None = None,
+                 raises_on: int | None = None, raising: BaseException | None = None,
+                 live_track: bool = True, world: FakeWorld | None = None,
+                 refusal: type[Exception] = ValueError, before_step: dict | None = None) -> None:
         self.timeline = timeline
         self.drawn = list(drawn)
+        self.in_view = set(in_view)
         self.ends_on = ends_on
         self.raises_on = raises_on
         self.raising = raising
-        self.LiveTrack = FakeLiveTrack(timeline) if live_track else None
+        self.world = world
+        self.before_step = before_step or {}
+        self.LiveTrack = FakeLiveTrack(timeline, world, refusal) if live_track else None
         self.FirstRenderedSeconds = first
         self.RenderedTimeSeconds = first
         self.WindowOpensAtSeconds = first if window is None else window
@@ -140,9 +200,16 @@ class FakeSession:
         self.advanced.append(second)
         self.timeline.append(("advance", second))
         step = len(self.advanced)
-        if self.LiveTrack is not None:
-            self.LiveTrack.complete(sample(step * TICKS_PER_STEP - 1, second + 0.95, self.drawn,
-                                           in_window=second >= self.WindowOpensAtSeconds))
+        if step in self.before_step:
+            self.before_step[step]()
+        track = self.LiveTrack
+        if track is not None:
+            camera, camera_id = "none", track.FollowedCamera
+            if camera_id is not None:
+                camera = "followed" if camera_id in self.world.actors else "missing"
+            track.complete(sample(step * TICKS_PER_STEP - 1, second + 0.95, self.drawn,
+                                  in_window=second >= self.WindowOpensAtSeconds, camera=camera,
+                                  camera_id=camera_id, in_view=self.in_view))
         if step == self.raises_on:
             raise self.raising
         self.RenderedTimeSeconds = second + STEP_S
@@ -168,12 +235,34 @@ class FakeCamera:
 
 
 class FakeWorld:
-    """A world that hands out one session, records what the drive asked of it, and records nothing."""
+    """A world that hands out one session, holds the actors any client spawned, records what the drive
+    asked of it, and records nothing."""
 
     def __init__(self, session: FakeSession | None) -> None:
         self.session = session
         self.drive_arguments: dict | None = None
         self.recording: tuple | None = None
+        self.actors: dict[int, FakeActor] = {}
+        self.asked: list[list[int]] = []
+        self.names_read: list[int] = []
+
+    def add(self, actor_id: int, name: str, type_id: str = "sensor.camera.rgb",
+            optics: tuple[int, int, float] = (1280, 720, 90.0)) -> FakeActor:
+        """Spawn an actor, as this client or another would."""
+        actor = FakeActor(self, actor_id, name, type_id, optics)
+        self.actors[actor_id] = actor
+        return actor
+
+    def get_actor_ids(self) -> set:
+        return set(self.actors)
+
+    def get_actors(self, actor_ids):
+        self.asked.append(list(actor_ids))
+        return [self.actors[actor_id] for actor_id in actor_ids if actor_id in self.actors]
+
+    def camera_name(self, camera: FakeActor) -> str:
+        self.names_read.append(camera.id)
+        return camera.name
 
     def get_map(self):
         return SimpleNamespace(name="Shahid_Bahonar_Port")

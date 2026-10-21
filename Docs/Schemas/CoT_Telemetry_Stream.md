@@ -49,6 +49,8 @@ Multicast datagrams are sent with time-to-live `--ttl` (`carla-sctmv`), `--udp-t
 A vehicle's uid from `carla-drive` is `CARLA-TRUTH-SUMO-<SUMO id>`, the uid the drive's truth sidecars give it.\
 From `carla-cot-telemetry` the same vehicle is `SUMO-TRUTH-<SUMO id>`.\
 A receiver given both feeds draws it as two tracks.\
+`carla-drive --cot-emit in-view --cot-camera NAME` sends only the vehicles in the picture of the live camera named NAME.\
+The events it sends are the same, and the mode adds no field to them.\
 `carla-drive` sends the frames before its capture window opens too.\
 It writes no file of its own: the capture sidecars and the world truth track record the same truth.
 

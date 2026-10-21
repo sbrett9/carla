@@ -8,6 +8,15 @@ import socket
 import time
 import unicodedata
 
+import carlanet  # noqa: F401  -- loads the .NET runtime the System namespace below comes from
+
+# isort: split
+# The .NET namespaces exist only once carlanet has loaded its assemblies, so this import has to follow
+# it; an import sorter would put it first and break the tool at start.
+from System import ArgumentException
+
+# isort: split
+from carlacontrol.CameraByName import CameraByName
 from carlacontrol.CotDisplayConvention import COT_AFFILIATIONS, CotDisplayConvention
 from carlacontrol.CotUdpEmitter import CotUdpEmitter
 
@@ -23,6 +32,13 @@ class DriveCotFeed:
     and the display convention's affiliations (`live_track`), takes the samples the session completed
     after each advance and sends each event's XML as the session wrote it.
 
+    In-view mode sends only the events whose vehicle is in the picture of the live camera holding a
+    name. The camera is looked for before the session starts and again after each step until one is
+    found (`CameraByName`), then followed (`session.LiveTrack.Follow`), which changes nothing about
+    which vehicles get a body. A sample whose frame no longer holds it says the camera has gone, and
+    the looking starts again. A sample taken while no camera of that name is followed sends nothing.
+    Each change is logged once.
+
     A send that fails is counted and the drive goes on. The first failure of a run of them is logged,
     and so is the send that next succeeds.
     """
@@ -33,6 +49,16 @@ class DriveCotFeed:
     DEFAULT_STALE_S = 3.0
     DEFAULT_UID_PREFIX = "CARLA-TRUTH"
     DEFAULT_AFFILIATION = "n"
+
+    ALL = "all"
+    IN_VIEW = "in-view"
+    DEFAULT_EMIT = ALL
+
+    # What a sample's `camera` says: no camera followed, the followed camera posed on the frame, or the
+    # followed camera absent from the frame's snapshot.
+    CAMERA_NONE = "none"
+    CAMERA_FOLLOWED = "followed"
+    CAMERA_MISSING = "missing"
 
     def __init__(self, args: argparse.Namespace) -> None:
         """Read the feed's settings, with every default already resolved, and its display convention.
@@ -65,9 +91,22 @@ class DriveCotFeed:
             except (OSError, ValueError) as unread:
                 raise ValueError(f"the display convention {self.convention_path} cannot be read: "
                                  f"{unread}") from unread
+        self.emit = args.cot_emit
+        self.camera_name = args.cot_camera
+        # This drive spawns a camera of its own under --camera-name, fixed or flown, once the session
+        # has started, and hands it over as it is spawned (`offer`).
+        self.own_camera = (self.in_view and args.camera_name is not None
+                           and args.camera_name.lower() == self.camera_name.lower()
+                           and (args.view == "free" or not args.no_record))
+        self.cameras: CameraByName | None = None
+        self.found = None
+        self.followed: int | None = None
+        self.ever_followed = False
+        self.said_missing = False
         self.emitter = None
         self.track = None
         self.samples = 0
+        self.samples_unfollowed = 0
         self.events_sent = 0
         self.sends_failed = 0
         self.failing = False
@@ -110,21 +149,104 @@ class DriveCotFeed:
         return (f"'{letter}' must be one of {' '.join(sorted(COT_AFFILIATIONS))}, the letters a CoT "
                 "type's affiliation takes")
 
+    @property
+    def in_view(self) -> bool:
+        """Whether only the vehicles in the followed camera's picture are sent."""
+        return self.emit == self.IN_VIEW
+
     def live_track(self) -> dict:
         """The session's `live_track`: the rate, staleness, uid prefix and affiliations, each given."""
         return {"rate_hz": self.rate_hz, "stale_s": self.stale_s, "uid_prefix": self.uid_prefix,
                 "affiliation": self.affiliation,
                 "affiliation_by_type": dict(self.convention.affiliation_by_type)}
 
+    def connect(self, world) -> None:
+        """In in-view mode, look for the camera in the world before the session starts, so a camera that
+        is missing is said before the fast-forward to the first frame."""
+        if not self.in_view:
+            return
+        self.cameras = CameraByName(world, self.camera_name)
+        if self.own_camera:
+            logger.info("cot camera %s is this drive's own camera, followed once it is spawned",
+                        self.camera_name)
+            return
+        if self._look() is not None:
+            logger.info("cot camera %s: actor %d holds the name, followed once the session starts",
+                        self.camera_name, self.found.id)
+
     def start(self, session) -> None:
-        """Open the socket, once the session that builds the events has started."""
+        """Open the socket, once the session that builds the events has started, and in in-view mode
+        follow the camera if one holds the name."""
         self.emitter = CotUdpEmitter(self.ip, self.port, ttl=self.ttl)
         self.track = session.LiveTrack
+        self.look_for_camera()
+
+    def offer(self, camera) -> None:
+        """Follow a camera this drive has just spawned under the name in-view mode follows.
+
+        It reaches the world's snapshot only with the next tick, so a look at the snapshot would not
+        find it before that tick's frame was sampled.
+        """
+        if self.own_camera and self.followed is None:
+            self.found = camera
+            self.look_for_camera()
+
+    def look_for_camera(self) -> None:
+        """In in-view mode with no camera followed, follow the live camera holding the name, where one
+        does now."""
+        if not self.in_view or self.followed is not None or self.track is None:
+            return
+        camera = self._look()
+        if camera is None:
+            return
+        self.found = None
+        try:
+            self.track.Follow(camera.id)
+        except ArgumentException as refused:
+            # The camera left the world between the look and the follow; its id is not looked at again.
+            logger.warning("cot camera %s: actor %d could not be followed (%s); still looking",
+                           self.camera_name, camera.id, refused.Message)
+            return
+        self.followed = int(camera.id)
+        optics = self.track.FollowedOptics
+        logger.info("cot camera %s followed%s: actor %d, %dx%d, fov %g", self.camera_name,
+                    " again" if self.ever_followed else "", self.followed, optics.ImageWidth,
+                    optics.ImageHeight, optics.HorizontalFovDegrees)
+        self.ever_followed = True
+        self.said_missing = False
 
     def after_step(self) -> None:
-        """Send what the session sampled during the advance just made."""
-        if self.track is not None:
-            self._drain()
+        """Send what the session sampled during the advance just made. In in-view mode, then let the
+        followed camera go where a sample says its frame no longer held it, and look for one while none
+        is followed."""
+        if self.track is None:
+            return
+        samples = self._drain()
+        if not self.in_view:
+            return
+        if self.followed is not None and any(
+                sample["camera"] == self.CAMERA_MISSING and sample["camera_id"] == self.followed
+                for sample in samples):
+            logger.warning("cot camera %s gone: actor %d is no longer in the world, so in-view mode "
+                           "sends nothing until a live camera holds the name again", self.camera_name,
+                           self.followed)
+            self.track.Unfollow()
+            self.followed = None
+            self.said_missing = True
+        self.look_for_camera()
+
+    def _look(self):
+        """The camera found before and not yet followed, or else the live camera holding the name among
+        the actors not examined before; None where there is none, said once."""
+        if self.found is None:
+            self.found = self.cameras.find()
+        # A look at a snapshot not yet received examines nothing, and says nothing either.
+        if self.found is None and not self.own_camera and self.cameras.examined \
+                and not self.said_missing:
+            logger.warning("cot camera %s: no live camera holds the name, so in-view mode sends "
+                           "nothing until one does", self.camera_name)
+            self.said_missing = True
+        return self.found
 
     def close(self) -> None:
         """Send the samples still waiting, log what the feed did, and close the socket."""
@@ -166,9 +288,16 @@ class DriveCotFeed:
         return samples
 
     def _send(self, sample: dict) -> None:
-        """Send each of one sample's events as one datagram."""
+        """Send each of one sample's events as one datagram: all of them, or in in-view mode the ones
+        in the followed camera's picture."""
         self.samples += 1
-        for event in sample["events"]:
+        events = sample["events"]
+        if self.in_view:
+            if sample["camera"] != self.CAMERA_FOLLOWED:
+                self.samples_unfollowed += 1
+                return
+            events = [event for event in events if event["in_view"]]
+        for event in events:
             try:
                 self.emitter.send(event["xml"])
             except OSError as failure:
@@ -196,3 +325,8 @@ class DriveCotFeed:
             "%.4f s on average, %.4f s at worst", self.samples, self.events_sent, self.target(),
             self.sends_failed, track.FramesUnpaired, track.BodiesMissing, track.SamplesDropped, mean,
             self.worst_drain_seconds)
+        if self.in_view:
+            (logger.warning if self.samples_unfollowed else logger.info)(
+                "cot camera         %d samples sent nothing because no camera named %s was followed, "
+                "%d of them with the followed camera gone from the frame", self.samples_unfollowed,
+                self.camera_name, track.SamplesCameraMissing)

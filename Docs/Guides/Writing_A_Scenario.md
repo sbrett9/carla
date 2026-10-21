@@ -927,6 +927,12 @@ Positions are CARLA meters: x east, y south, so north is negative y.\
 The package's `areas.resolved.json` gives each area of interest's position in CARLA meters (see [Resolved areas of interest](../Schemas/Areas_Resolved.md)).\
 Esc or Q closes the window.
 
+To send the vehicles the drive draws to a TAK client or another Cursor-on-Target receiver, add `--cot-udp HOST:PORT` to the drive.\
+By default it sends one event per vehicle per simulated second, each the event a capture of that frame writes for the vehicle, less what depends on a picture.\
+Each vehicle takes the affiliation that the scenario's display convention, `<scenario>.display.json` beside the `.sumocfg`, gives its class (see [CoT display convention](../Schemas/Display_Convention.md)).\
+With `--cot-emit in-view --cot-camera NAME`, it sends only the vehicles in the picture of the live camera named NAME, such as the follower's `--sensor-id`.\
+[Cameras and missions](Cameras_And_Missions.md#worked-example-a-live-cursor-on-target-feed-of-what-the-orbit-sees) works through both.
+
 Capturing imagery and truth from a compiled scenario uses `carla-capture` and a run file (see [Run configuration](../Schemas/Run_Configuration.md)).\
 See [Running a capture](Running_A_Capture.md).
 
