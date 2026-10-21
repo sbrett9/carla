@@ -70,8 +70,8 @@ build of the world cannot put the traffic somewhere the world is not.
 
 `--end SECOND` ends the drive at a simulated second in place of a number of steps: the SUMO step that
 second falls in is the last step drawn, and the live feed's sample of it is sent before the drive
-stops. On a scenario that steps 1.0 s from zero, `--warm-up 271169 --end 271433` draws the 265 steps
-from 271169 to 271433, where `--steps 264` stops after the step at 271432.
+stops. On a scenario that steps 1.0 s from zero, `--warm-up 3600 --end 3900` draws the 301 steps from
+3600 to 3900, where `--steps 300` stops after the step at 3899.
 
 Which SUMO runs is named, not left to the environment. The session launches the installation this
 tool names: `--sumo-home` where given, otherwise `CARLANET_SUMO_HOME`, otherwise, run from a
@@ -226,11 +226,11 @@ NAME, compared without regard to case (a carla-camera-follower's `--sensor-id`, 
 test a capture's `in_frame` records, and not wholly beyond a `--draw-distance`. A vehicle hidden behind
 another is in view. It filters the feed and nothing else: which vehicles get a body is unchanged. While
 no live camera holds the name nothing is sent, and the log says when the camera goes and when it is
-found again. To watch the gate of the Bahonar port from a camera of its own and send what it sees:
+found again. To send what a follower's orbiting camera sees:
 
-    carla-camera-follower --sensor-id Gate_Orbit_1 --pattern orbit --orbit-centre 1998.4 -1035.0
+    carla-camera-follower --sensor-id Orbit_1 --pattern orbit --orbit-centre 120 -340
     carla-drive --scenario ... --world-package ... --epoch ... --no-record --real-time-factor 1.0 \\
-        --steps 0 --cot-udp 239.2.3.1:6969 --cot-emit in-view --cot-camera Gate_Orbit_1
+        --steps 0 --cot-udp 239.2.3.1:6969 --cot-emit in-view --cot-camera Orbit_1
 
 Every still is named after its camera and its frame's simulated civil time at the epoch's offset,
 `<camera name>_<yyyyMMdd_HHmmss.fff>.png` and `.xml`, and the camera's platform track carries the

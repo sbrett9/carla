@@ -118,7 +118,7 @@ def test_the_help_says_end_is_a_simulated_second_and_the_last_step_drawn(drive, 
     assert "--end SECOND" in said
     assert "the simulated second the drive ends at, in place of --steps: the SUMO step that second " \
         "falls in is the last step drawn" in said
-    assert "`--warm-up 271169 --end 271433` draws the 265 steps from 271169 to 271433" in said
+    assert "`--warm-up 3600 --end 3900` draws the 301 steps from 3600 to 3900" in said
 
 
 # ---- the drive ---------------------------------------------------------------------------------

@@ -907,7 +907,8 @@ carla-drive --scenario Import/Arapahoe_I25_SupervisionCheck.sumocfg --world-pack
 - `--real-time-factor 1.0` holds the run to the wall clock.\
   The default, 0, runs as fast as the machine allows.
 - `--steps 0` runs until the scenario ends.\
-  Without it, the drive stops after 600 SUMO steps.
+  Without it, the drive stops after 600 SUMO steps.\
+  `--end SECOND` stops it instead after the SUMO step that simulated second falls in.
 - `--warm-up SECONDS` runs SUMO ahead to that second before the first CARLA tick, so the view starts near the part you want to see.\
   The resolution report gives each time in seconds.
 
