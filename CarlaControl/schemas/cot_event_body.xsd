@@ -13,7 +13,9 @@
   cannot, because its root and the sidecar's are both <events> with no namespace, so it holds copies
   of them that a test holds equal to truth_sidecar.xsd's.
 
-  Every vehicle event is formatted by carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot.
+  carla-sctmv's and the SUMO bridge's vehicle events are formatted by
+  carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot, carla-drive's by
+  CarlaNet.Recording.CotWriter.StreamEvent, the code that writes a truth sidecar's vehicle events.
 -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:cap="urn:carla-sumo-capture:schema:annotation"
            elementFormDefault="unqualified" attributeFormDefault="unqualified" version="1">
@@ -50,8 +52,9 @@
       <xs:annotation>
         <xs:documentation>The track id. A CARLA vehicle is &lt;prefix&gt;-&lt;actor id&gt;; a vehicle a
           SUMO drive lent a CARLA body is &lt;prefix&gt;-SUMO-&lt;SUMO id&gt;; the SUMO bridge's is
-          &lt;prefix&gt;-&lt;SUMO id&gt;. The prefix is CARLA-TRUTH from carla-sctmv and SUMO-TRUTH
-          from the bridge unless --uid-prefix sets it.</xs:documentation>
+          &lt;prefix&gt;-&lt;SUMO id&gt;. The prefix is CARLA-TRUTH from carla-sctmv, CARLA-TRUTH from
+          carla-drive unless --cot-uid-prefix sets it, and SUMO-TRUTH from the bridge unless
+          --uid-prefix sets it.</xs:documentation>
       </xs:annotation>
       <xs:simpleType>
         <xs:restriction base="xs:string"><xs:minLength value="1"/></xs:restriction>
@@ -68,7 +71,7 @@
       <xs:annotation><xs:documentation>The same instant as time.</xs:documentation></xs:annotation>
     </xs:attribute>
     <xs:attribute name="stale" type="Instant" use="required">
-      <xs:annotation><xs:documentation>time plus the staleness, 3 seconds unless --stale sets it.</xs:documentation></xs:annotation>
+      <xs:annotation><xs:documentation>time plus the staleness, 3 seconds unless --stale (--cot-stale for carla-drive) sets it.</xs:documentation></xs:annotation>
     </xs:attribute>
   </xs:complexType>
 
@@ -144,7 +147,7 @@
       <xs:annotation><xs:documentation>The SUMO vehicle a SUMO drive lent this body to.</xs:documentation></xs:annotation>
     </xs:attribute>
     <xs:attribute name="vtype_id" type="xs:string" use="optional">
-      <xs:annotation><xs:documentation>That vehicle's SUMO type.</xs:documentation></xs:annotation>
+      <xs:annotation><xs:documentation>That vehicle's SUMO type. Left out of carla-drive's datagram.</xs:documentation></xs:annotation>
     </xs:attribute>
     <xs:attribute name="admitted_tick" type="xs:nonNegativeInteger" use="optional">
       <xs:annotation><xs:documentation>The frame on which the body began drawing that vehicle.</xs:documentation></xs:annotation>

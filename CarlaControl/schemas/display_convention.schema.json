@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:carla-sumo-capture:schema:display-convention:1",
   "title": "CoT display convention",
-  "description": "How one run draws each vehicle population in Cursor-on-Target: the affiliation letter a TAK client colors its tracks by. A choice about display, not part of the scenario: kept beside the scenario as <scenario>.display.json, and read by carla-cot-telemetry. It names populations and never single vehicles.",
+  "description": "How one run draws each vehicle population in Cursor-on-Target: the affiliation letter a TAK client colors its tracks by. A choice about display, not part of the scenario: kept beside the scenario as <scenario>.display.json, and read by carla-cot-telemetry and carla-drive. It names populations and never single vehicles.",
   "type": "object",
   "additionalProperties": false,
   "required": [

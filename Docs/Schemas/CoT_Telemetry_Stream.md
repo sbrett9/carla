@@ -29,21 +29,28 @@ All three files must sit in one folder.
 
 ## Writers and readers
 
-Two tools send it.\
-Both format events with `carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot`.
+Three tools send it.\
+`carla-sctmv` and `carla-cot-telemetry` format events with `carlacontrol.CotUdpEmitter.vehicle_telemetry_to_cot`.\
+`carla-drive` sends the events its SUMO drive session writes with `CotWriter.StreamEvent`, the code that writes a truth sidecar's vehicle events.
 
-| | `carla-sctmv` | `carla-cot-telemetry --udp HOST:PORT` |
-|---|---|---|
-| Vehicles | CARLA's, from `get_vehicle_telemetry` | SUMO's, from TraCI, with no CARLA server |
-| Turned on | with the Y key while it runs | by `--udp` |
-| Destination | `--tak-host` (default `239.2.3.1`, TAK's multicast group) and `--tak-port` (default 6969) | the address given. If no port is given, port 6969. |
-| Rate | `--rate`, default 5 Hz | `--rate`, default 1 Hz of simulation time |
-| `time` of each event | the wall clock at the moment the event was formatted | the run's epoch plus the simulation time |
-| uid prefix | `CARLA-TRUTH` | `SUMO-TRUTH`, or `--uid-prefix` |
-| Affiliation | `--affiliation`, default `n` | the run's display convention, by population. `--marked-affiliation` sets it for planted vehicles, in the live feed only. |
-| Extra detail | `_capture` (the frame) and `_solar` (the sun) | none |
+| | `carla-sctmv` | `carla-cot-telemetry --udp HOST:PORT` | `carla-drive --cot-udp HOST:PORT` |
+|---|---|---|---|
+| Vehicles | CARLA's, from `get_vehicle_telemetry` | SUMO's, from TraCI, with no CARLA server | every vehicle with a CARLA body on a sampled frame, from the truth a capture of that frame records, cut to the bodies the frame drew |
+| Turned on | with the Y key while it runs | by `--udp` | by `--cot-udp` |
+| Destination | `--tak-host` (default `239.2.3.1`, TAK's multicast group) and `--tak-port` (default 6969) | the address given. If no port is given, port 6969. | the address given. If no port is given, port 6969. |
+| Rate | `--rate`, default 5 Hz | `--rate`, default 1 Hz of simulation time | `--cot-hz`, default 1 Hz of simulation time, in whole world ticks: the newest frame of each interval |
+| `time` of each event | the wall clock at the moment the event was formatted | the run's epoch plus the simulation time | the frame's civil time: the scenario's epoch plus the frame's simulated second |
+| uid prefix | `CARLA-TRUTH` | `SUMO-TRUTH`, or `--uid-prefix` | `CARLA-TRUTH`, or `--cot-uid-prefix` |
+| Affiliation | `--affiliation`, default `n` | the run's display convention, by population. `--marked-affiliation` sets it for planted vehicles, in the live feed only. | the run's display convention, by population, and `--cot-affiliation`, default `n`, for a population it does not name |
+| Extra detail | `_capture` (the frame) and `_solar` (the sun) | none | none |
 
-Multicast datagrams are sent with time-to-live `--ttl` (`carla-sctmv`) or `--udp-ttl` (`carla-cot-telemetry`), default 1.
+Multicast datagrams are sent with time-to-live `--ttl` (`carla-sctmv`), `--udp-ttl` (`carla-cot-telemetry`) or `--cot-udp-ttl` (`carla-drive`), default 1.
+
+A vehicle's uid from `carla-drive` is `CARLA-TRUTH-SUMO-<SUMO id>`, the uid the drive's truth sidecars give it.\
+From `carla-cot-telemetry` the same vehicle is `SUMO-TRUTH-<SUMO id>`.\
+A receiver given both feeds draws it as two tracks.\
+`carla-drive` sends the frames before its capture window opens too.\
+It writes no file of its own: the capture sidecars and the world truth track record the same truth.
 
 There is no handshake and no acknowledgment.\
 A receiver listens on the port and parses each datagram as one XML document.\
@@ -51,7 +58,11 @@ Datagrams are UTF-8 and carry no XML declaration.
 
 ## How the stream differs from the truth sidecar
 
-- It never carries what depends on a picture: `in_frame`, the box fields, occlusion, `lights`, `pose_source`, `<_box3d>` or `<_supervision>`.
+- It never carries what depends on a picture: `pitch_deg`, `roll_deg`, `in_frame`, the apparent size, the box fields, occlusion, `lights`, `pose_source`, `beyond_draw_distance`, `camera_range_m`, `<_box3d>` or `<_supervision>`.
+- A `carla-drive` datagram is the event a capture of the same frame writes for the vehicle, written by the same code, less those fields.\
+  It also leaves out `vtype_id`, which holds the scenario author's class name, and `sumo_angle_deg`.\
+  Its `type` carries the display convention's affiliation, where a sidecar's carries the recorder's single affiliation, `n` by default.\
+  Its `stale` is `--cot-stale` seconds after its `time`, where a sidecar's is 3 seconds after.
 - A SUMO bridge datagram leaves out `type_id`, `special_type`, `role_name` and `marked`.\
   Those fields hold the scenario author's names for its vehicle types and flows.\
   They also say which vehicles it planted.\
@@ -65,8 +76,9 @@ Datagrams are UTF-8 and carry no XML declaration.
 - There is no container.\
   The stream therefore has no format version and no record of what made it.
 - The SUMO bridge's `hae` is the bare-earth ground height under the vehicle's front bumper.\
-  CARLA's is the height of the body's origin with the drape offset removed.\
-  It therefore includes the origin's height above the ground.
+  The `hae` of `carla-sctmv` and `carla-drive` is the height of the body's origin with the height-align offset removed.\
+  It therefore includes the origin's height above the ground.\
+  A body on a bridge or an overpass is reported at the height CARLA seated it at, on the structure.
 
 ## Fields
 
@@ -90,12 +102,12 @@ Datagrams are UTF-8 and carry no XML declaration.
 | Attribute | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `version` | string | | yes | `2.0`, the CoT event version. |
-| `uid` | string | | yes | The track id. A CARLA vehicle is `CARLA-TRUTH-<actor id>`. A vehicle a SUMO drive lent a CARLA body is `CARLA-TRUTH-SUMO-<SUMO id>`. This id keeps its track the same through a change of body. A SUMO bridge vehicle is `SUMO-TRUTH-<SUMO id>`. |
+| `uid` | string | | yes | The track id. A CARLA vehicle is `CARLA-TRUTH-<actor id>`. A vehicle a SUMO drive lent a CARLA body is `CARLA-TRUTH-SUMO-<SUMO id>`, from `carla-sctmv` and from `carla-drive`, whose `--cot-uid-prefix` can replace `CARLA-TRUTH`. This id keeps its track the same through a change of body. A SUMO bridge vehicle is `SUMO-TRUTH-<SUMO id>`. |
 | `type` | string | | yes | `a-<affiliation>-G-E-V`: a ground vehicle. The affiliation is one of `p u a f n s h j k o x`. |
 | `how` | string | | yes | `m-g`: machine-generated truth. |
 | `time` | string | | yes | When the vehicle was at the point. ISO 8601 UTC to the millisecond. |
 | `start` | string | | yes | The same instant as `time`. |
-| `stale` | string | | yes | `time` plus `--stale` seconds, 3 by default. |
+| `stale` | string | | yes | `time` plus `--stale` seconds (`--cot-stale` for `carla-drive`), 3 by default. |
 
 ### `<point>`
 
@@ -103,7 +115,7 @@ Datagrams are UTF-8 and carry no XML declaration.
 |---|---|---|---|---|
 | `lat` | decimal | degrees | yes | WGS84 latitude, seven decimals. |
 | `lon` | decimal | degrees | yes | WGS84 longitude, seven decimals. |
-| `hae` | decimal | meters | yes | WGS84 ellipsoidal height, two decimals. Bare-earth truth, not the height the body was drawn at. |
+| `hae` | decimal | meters | yes | WGS84 ellipsoidal height, two decimals, in the bare-earth convention. From CARLA, the body origin's height with the height-align offset removed. From the SUMO bridge, the bare-earth ground under the front bumper. |
 | `ce` | decimal | meters | yes | Horizontal error: `0.0` for truth. |
 | `le` | decimal | meters | yes | Vertical error: `0.0` for truth. |
 
@@ -126,12 +138,15 @@ Datagrams are UTF-8 and carry no XML declaration.
 | `special_type` | string | | no | `emergency`, `taxi`, `electric`, or empty. Left out of a SUMO bridge datagram. |
 | `length_m`, `width_m`, `height_m` | decimal | meters | yes | The vehicle's size, two decimals. CARLA's is the drawn body's bounding box. The bridge's is SUMO's. |
 | `color` | string | | yes | `R,G,B`. From CARLA, the body color, empty for a blueprint with none. From the bridge, the SUMO type's sumo-gui color. |
-| `role_name` | string | | no | The CARLA role name. Left out of a SUMO bridge datagram. |
+| `role_name` | string | | no | The CARLA role name: `sumo` for every body a SUMO drive lends. Left out of a SUMO bridge datagram. |
 | `vx`, `vy`, `vz` | decimal | m/s | yes | Velocity in CARLA's frame: east, south, up. |
 | `heading_deg` | decimal | degrees | no | The direction the body points, clockwise from north. CARLA vehicles only. |
 | `sumo_id` | string | | no | The SUMO vehicle a SUMO drive lent this body to. |
-| `vtype_id` | string | | no | That vehicle's SUMO type. |
+| `vtype_id` | string | | no | That vehicle's SUMO type. Left out of a `carla-drive` datagram, because it holds the scenario author's class name. |
 | `admitted_tick` | integer | frames | no | The frame on which the body began drawing that vehicle. |
+
+A `carla-drive` datagram carries every attribute above but `vtype_id`.\
+`heading_deg`, `sumo_id` and `admitted_tick` are always present in it.
 
 ### `<_capture>` and `<_solar>` (`carla-sctmv` only)
 

@@ -94,6 +94,18 @@ class CotDisplayConvention:
         return config_path.with_name(config_path.stem + SUFFIX)
 
     @classmethod
+    def given_or_beside(cls, given: str | Path | None, config_path: str | Path) -> Path | None:
+        """The convention file a run draws with: the one it was given, or else the scenario's own
+        beside its configuration where there is one (`beside`). None where neither is.
+
+        A file given is returned whether or not it is there, so reading it refuses one that is not.
+        """
+        if given is not None:
+            return Path(given)
+        beside = cls.beside(config_path)
+        return beside if beside.is_file() else None
+
+    @classmethod
     def from_file(cls, path: str | Path) -> CotDisplayConvention:
         """Read a convention file, refusing one that carries anything but populations."""
         path = Path(path)
@@ -132,8 +144,8 @@ class CotDisplayConvention:
             "display-convention", CONVENTION_VERSION, "CoT display convention",
             "How one run draws each vehicle population in Cursor-on-Target: the affiliation letter "
             "a TAK client colors its tracks by. A choice about display, not part of the scenario: "
-            f"kept beside the scenario as <scenario>{SUFFIX}, and read by carla-cot-telemetry. It "
-            "names populations and never single vehicles.",
+            f"kept beside the scenario as <scenario>{SUFFIX}, and read by carla-cot-telemetry and "
+            "carla-drive. It names populations and never single vehicles.",
             {"type": "object", "additionalProperties": False,
              "required": [VERSION_KEY, AFFILIATIONS_KEY],
              "properties": {

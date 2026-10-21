@@ -17,6 +17,7 @@ from CarlaNet.CoSim import CoSimSessionRefusedException
 # isort: split
 from carlacontrol.CameraFootprints import CameraFootprints
 from carlacontrol.DriveCamera import DriveCamera
+from carlacontrol.DriveCotFeed import DriveCotFeed
 from carlacontrol.DriveReport import DriveReport
 from carlacontrol.FreeViewParts import FreeViewParts
 from carlacontrol.PacingProgress import PacingProgress
@@ -32,8 +33,9 @@ class DriveRun:
 
     The command parses its options (`carlacontrol.commands.drive`) and hands them here. The run checks
     the files they name, starts the session, places the fixed camera or opens the free view, advances
-    the session until the steps run out, the scenario ends or the free view is closed, and logs what
-    the session reports. Whatever happens after it connects, it gives back what it took, in order.
+    the session until the steps run out, the scenario ends or the free view is closed, sending the live
+    feed's samples after every advance where one was asked for, and logs what the session reports.
+    Whatever happens after it connects, it gives back what it took, in order.
     """
 
     # How long any one server call may take once the session is driving.
@@ -49,6 +51,7 @@ class DriveRun:
         self.camera = None
         self.depth = None
         self.recorder = None
+        self.cot: DriveCotFeed | None = None
         self.run_id = ""
         self.steps = 0
         self.free = FreeViewParts()
@@ -83,6 +86,8 @@ class DriveRun:
             self.session = self._start_session(sun, sumo)
             if self.session is None:
                 return 1
+            if self.cot is not None:
+                self.cot.start(self.session)
             self._announce_session()
 
             # Everything up to the recorder starting happens with the world already in synchronous mode:
@@ -112,8 +117,8 @@ class DriveRun:
             self._close()
 
     def _refuse_unusable_inputs(self) -> int | None:
-        """2 where a file the run needs is missing or the camera name is one the rule refuses, before
-        anything starts; None where the run may go on."""
+        """2 where a file the run needs is missing, the camera name is one the rule refuses, or the live
+        feed cannot be sent as asked, before anything starts; None where the run may go on."""
         args = self.args
         for label, path in (("scenario", args.scenario), ("world package", args.world_package),
                             ("catalogue", args.catalogue)):
@@ -126,6 +131,12 @@ class DriveRun:
             refused = carla.camera_name_problem(args.camera_name)
             if refused is not None:
                 logger.error("--camera-name: %s", refused)
+                return 2
+        if args.cot_udp is not None:
+            try:
+                self.cot = DriveCotFeed(args)
+            except ValueError as unusable:
+                logger.error("%s", unusable)
                 return 2
         return None
 
@@ -170,6 +181,7 @@ class DriveRun:
             run_manifest=args.run_manifest,
             run_manifest_header={"run_id": self.run_id, "tool": self.tool,
                                  "view": args.view} if args.run_manifest else None,
+            live_track=self.cot.live_track() if self.cot is not None else None,
             # What is printed about collisions, and nothing else: the session keeps every one either
             # way, and a line per collision is bound only where every collision is to be printed.
             collision_detail=args.collision_detail,
@@ -231,6 +243,7 @@ class DriveRun:
                     DriveReport.describe_world_truth_track(session.WorldTruthTrack))
         logger.info("run manifest: %s", session.RunManifest.Path if session.RunManifest is not None
                     else "none written; give --run-manifest to write one")
+        logger.info("cot feed: %s", DriveReport.describe_cot_feed(self.cot))
 
     def _open_free_view(self) -> int | None:
         """Open the window with the camera the operator flies. 1 where it cannot open."""
@@ -257,6 +270,7 @@ class DriveRun:
             self.aim.open = True
             session.Advance()
             self.aim.open = False
+            self._send_the_feed()
             self.steps += 1
             if self.aim.centre() is None:
                 logger.warning("nothing was rendered on the first step, so the camera is aimed "
@@ -286,7 +300,9 @@ class DriveRun:
         # nothing: the window's first capture is the frame at the instant it opens.
         prewarm_steps = 0
         while session.RenderedTimeSeconds < session.WindowOpensAtSeconds - 1e-6:
-            if not session.Advance():
+            more = session.Advance()
+            self._send_the_feed()
+            if not more:
                 logger.error("the scenario ended at t=%.2f s, before the window opened at "
                              "t=%.2f s", session.RenderedTimeSeconds,
                              session.WindowOpensAtSeconds)
@@ -323,7 +339,12 @@ class DriveRun:
         args, session = self.args, self.session
         started = time.time()
         try:
-            while session.Advance():
+            while True:
+                more = session.Advance()
+                # The step SUMO ended on was rendered too, and its frames sampled.
+                self._send_the_feed()
+                if not more:
+                    break
                 self.steps += 1
                 self.footprints.after_step(session)
                 if args.steps and self.steps >= args.steps:
@@ -343,6 +364,11 @@ class DriveRun:
 
         self._report(time.time() - started)
         return 0
+
+    def _send_the_feed(self) -> None:
+        """Send the live feed's samples of the advance just made, where the run sends one."""
+        if self.cot is not None:
+            self.cot.after_step()
 
     def _report(self, elapsed: float) -> None:
         """Log the session's report of a run that ended as asked."""
@@ -395,6 +421,12 @@ class DriveRun:
                 self.camera.destroy()
             except Exception as failure:
                 logger.error("could not destroy the camera: %r", failure)
+        if self.cot is not None:
+            # Before the session goes: the samples still waiting are taken from it, and its counts read.
+            try:
+                self.cot.close()
+            except Exception as failure:
+                logger.error("could not close the cot feed: %r", failure)
         if self.session is not None:
             # Disposal attempts every step of the shutdown whatever the ones before it did, and
             # reports the ones that failed together. Logging them is all a harness can do, and it
