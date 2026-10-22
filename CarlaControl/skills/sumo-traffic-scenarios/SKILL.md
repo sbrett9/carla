@@ -256,8 +256,8 @@ block:
     "parameters": {
       "expected_tower": {"type": "string",
                          "definition": "the tower the guard was due to relieve, as the id of its area of interest"},
-      "expected_shift_start": {"type": "string",
-                               "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"}},
+      "expected_shift_start": {"type": "time",
+                               "definition": "when the shift it was due to take up began"}},
     "counterfactual": {"kind": "term", "ref": "bahonar:tower_posting"}},
    {"term": "bahonar:tower_posting", "since": 1, "status": "active", "applies_to": ["entity"],
     "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
@@ -271,7 +271,7 @@ block:
                   "intervals": [{"participant": "offpost_d4_h7_t3", "phase": "dwell",
                                  "anchor": {"start": "stop:0", "end": "stop_end:0"}}],
                   "parameters": {"expected_tower": "tower_03",
-                                 "expected_shift_start": "2026-10-03T07:00:00+03:30"}}],
+                                 "expected_shift_start": "d4 07:00"}}],
    "series": [{"series_id": "tower_relief", "rota": "guard_posting", "member_role": "bahonar:guard",
                "slot_length": "8h", "supervision": "nominal", "labels": ["bahonar:tower_posting"]}]}}
 ```
@@ -289,9 +289,10 @@ leaves the post. How to author one well:
   different body, base, departure or stay would be a second signal the label does not name.
 - **Name where it was expected, and when, in the term's `parameters`.** Declare each key on the term
   with its `type` and `definition`, and give the values on the instance (check 56): `expected_tower`
-  is the tower's area of interest and `expected_shift_start` the shift's civil instant at the epoch's
-  offset. The empty place reaches the record as a magnitude of the vehicle's label, never as a label
-  of its own.
+  is the tower's area of interest and `expected_shift_start`, declared `time`, the shift change
+  `d4 07:00`, written as the guard's own departure is. The plan carries it as
+  `{"seconds": 345600.0, "civil": "2026-10-03T07:00:00+03:30"}`. The empty place reaches the record
+  as a magnitude of the vehicle's label, never as a label of its own.
 - **Anchor the interval to the vehicle's own events**: `{"start": "stop:0", "end": "stop_end:0"}` spans
   the parked shift from when SUMO has it arrive to when it leaves (check 58). The instance has one
   participant, with role `subject` (checks 19, 50).

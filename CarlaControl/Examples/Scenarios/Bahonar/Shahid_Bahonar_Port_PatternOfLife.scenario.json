@@ -3665,8 +3665,8 @@
                 "definition": "the tower the guard was due to relieve, as the id of its area of interest"
               },
               "expected_shift_start": {
-                "type": "string",
-                "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"
+                "type": "time",
+                "definition": "when the shift it was due to take up began"
               }
             },
             "counterfactual": {
@@ -3956,7 +3956,7 @@
         ],
         "parameters": {
           "expected_tower": "tower_03",
-          "expected_shift_start": "2026-10-03T07:00:00+03:30"
+          "expected_shift_start": "d4 07:00"
         }
       },
       {

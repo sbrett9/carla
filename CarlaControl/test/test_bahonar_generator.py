@@ -308,11 +308,11 @@ def test_the_shipped_anomalies_are_anchored_to_the_events_that_commit_them():
 
 
 @pytest.mark.parametrize(("parameters", "says"), [
-    ({"expected_tower": 3, "expected_shift_start": "2026-10-03T07:00:00+03:30"},
+    ({"expected_tower": 3, "expected_shift_start": "d4 07:00"},
      "parameter 'expected_tower' is 3, and 'bahonar:posting_not_taken_up' declares it string (the "
      "tower the guard was due to relieve, as the id of its area of interest)"),
-    ({"expected_tower": "tower_03", "expected_shift_start": "2026-10-03T07:00:00+03:30",
-      "expected_shift_end": "2026-10-03T15:00:00+03:30"},
+    ({"expected_tower": "tower_03", "expected_shift_start": "d4 07:00",
+      "expected_shift_end": "d4 15:00"},
      "carries parameter 'expected_shift_end', which none of its labels declares (they declare "
      "expected_shift_start, expected_tower)"),
 ])
@@ -375,10 +375,11 @@ def test_the_shipped_plan_carries_a_row_for_the_deviating_guard_and_none_for_the
     assert row["supervision"] == "annotated"
     assert row["participants"] == [{"entity_id": OFF_POST, "role": "subject", "sumo_id": OFF_POST}]
     assert row["parameters"] == {"expected_tower": "tower_03",
-                                 "expected_shift_start": "2026-10-03T07:00:00+03:30"}
+                                 "expected_shift_start": {"seconds": 345_600.0,
+                                                          "civil": "2026-10-03T07:00:00+03:30"}}
     declared = declared_term("bahonar:posting_not_taken_up")["parameters"]
     assert {key: entry["type"] for key, entry in declared.items()} == {
-        "expected_tower": "string", "expected_shift_start": "string"}
+        "expected_tower": "string", "expected_shift_start": "time"}
     (guard,) = [e for e in plan["entities"] if e["entity_id"] == OFF_POST]
     assert (guard["supervision"], guard["refs"]) == (["annotated"], [row["instance_id"]])
 
@@ -448,7 +449,8 @@ def test_t0_is_07_00_at_bahonar_and_every_local_time_is_kept():
     assert departs[OFF_POST] == skips[0].depart.civil
     (guard,) = [i for i in specification["supervision"]["instances"]
                 if i["name"] == "pi_posting_not_taken_up_d4"]
-    assert guard["parameters"]["expected_shift_start"] == skips[0].depart.civil
+    named = resolver.instant(guard["parameters"]["expected_shift_start"], "expected_shift_start")
+    assert (named.seconds, named.civil) == (skips[0].depart.seconds, skips[0].depart.civil)
 
 
 # ---- the scenario it replaced ----------------------------------------------------------------------------

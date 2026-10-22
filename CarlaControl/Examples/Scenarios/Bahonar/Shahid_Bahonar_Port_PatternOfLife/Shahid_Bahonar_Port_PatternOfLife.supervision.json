@@ -8,7 +8,7 @@
   "config_digest": "05d90f198b0d2b6e2e05d5df44a8f1c5ea7329a0f0982891ec157607ebe22d1f",
   "additional_digest": null,
   "vocabulary_version": 3,
-  "vocabulary_digest": "d3c2af61bdd520654c08c8e0d6037f2b882072a1b7202ad0286e249e833830fb",
+  "vocabulary_digest": "57d563eed058878cb9f421af4c34c896d48206354c6321106003cb790a7072be",
   "vocabulary": {
     "core": {
       "vocabulary_version": 3,
@@ -179,8 +179,8 @@
                 "definition": "the tower the guard was due to relieve, as the id of its area of interest"
               },
               "expected_shift_start": {
-                "type": "string",
-                "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"
+                "type": "time",
+                "definition": "when the shift it was due to take up began"
               }
             },
             "counterfactual": {
@@ -560,7 +560,10 @@
       ],
       "parameters": {
         "expected_tower": "tower_03",
-        "expected_shift_start": "2026-10-03T07:00:00+03:30"
+        "expected_shift_start": {
+          "seconds": 345600.0,
+          "civil": "2026-10-03T07:00:00+03:30"
+        }
       },
       "hard_negative_for": null,
       "counterfactual": null,

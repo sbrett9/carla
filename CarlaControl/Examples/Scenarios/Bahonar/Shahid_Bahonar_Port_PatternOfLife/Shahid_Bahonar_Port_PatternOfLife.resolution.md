@@ -2,7 +2,7 @@
 
 **Outcome:** compiled
 
-**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+ge878b77da.dirty, carlanet 0.10.0+gecb994c6b, SUMO 1.27.0, at 2026-10-15T04:00:46.835Z
+**Produced by:** carlacontrol.ScenarioCompiler 0.10.0+g4353ce32d.dirty, carlanet 0.10.0+gcc5eadd64, SUMO 1.27.0, at 2026-10-22T22:00:04.463Z
 
 7 day(s) of pattern of life at Shahid Bahonar Port from 07:00 on 29 September 2026: diurnal corridor traffic, ferry pulses, airfield shift changes, a guard at each of sixteen towers relieved every eight hours and routine air-freight hauls, with a guard who parks elsewhere instead of relieving a tower, an escort to the drydock, two gate probes, a perimeter shadow and a ferry stay-behind planted against it. Written by CarlaControl/scripts/make_bahonar_scenario.py; edit that, not this.
 
@@ -835,7 +835,7 @@ Bodies from catalogue `carla-0.10.0-windows` (vehicles.catalogue.json, digest `6
   - transit: from depart (2026-10-05T02:30:00+03:30) to open
 - **Shahid_Bahonar_Port_PatternOfLife/pi_ferry_stay_behind_d1**: annotated, labels bahonar:arrival_without_departure; staybehind (subject)
   - dwell: from stop:0 to stop_end:0 (2026-10-06T07:00:00+03:30)
-- **Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4**: annotated, labels bahonar:posting_not_taken_up; offpost_d4_h7_t3 (subject); parameters expected_tower = "tower_03", expected_shift_start = "2026-10-03T07:00:00+03:30"
+- **Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4**: annotated, labels bahonar:posting_not_taken_up; offpost_d4_h7_t3 (subject); parameters expected_tower = "tower_03", expected_shift_start = {"seconds": 345600.0, "civil": "2026-10-03T07:00:00+03:30"}
   - dwell: from stop:0 to stop_end:0, 28800 s declared
 - **Shahid_Bahonar_Port_PatternOfLife/haul_d0_0**: nominal, labels bahonar:routine_freight_haul; haul_d0_0 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
 - **Shahid_Bahonar_Port_PatternOfLife/haul_d0_1**: nominal, labels bahonar:routine_freight_haul; haul_d0_1 (subject); a hard negative for bahonar:coordinated_group_transit, bahonar:destination_off_pattern
@@ -1360,7 +1360,7 @@ SUMO seed 42, step 1 s, end 604800 s. The processing options, each written into 
   },
   "supervision": {
     "path": "Shahid_Bahonar_Port_PatternOfLife.supervision.json",
-    "sha256": "980afbf96d0649d8e1137d9a8febe2c3c2284ca2cf2e1c53415ed2fc5aca2aab"
+    "sha256": "eb9f69115c9e26bf410053a10cb8dbd61cbbfa33232908d0000fb2541ecf2247"
   }
 }
 ```
