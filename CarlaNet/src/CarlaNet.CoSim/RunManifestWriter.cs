@@ -45,8 +45,9 @@ namespace CarlaNet.CoSim;
 /// <item><term><c>instance</c>, <c>series</c>, <c>cohort</c></term><description>Next, where the compile
 /// lock binds a supervision plan: each of its pattern instances, recurring series and cohorts as declared
 /// -- identity, supervision state, labels and parameters, an instance's participants with their roles and
-/// the intervals it declares with their anchors, a series' slots. An interval's declared instants are
-/// written in civil time under the run's epoch, from their simulated seconds, so a run that moves
+/// the intervals it declares with their anchors, a series' slots. An interval's declared instants, and
+/// the civil instant of each parameter its labels declare a time (<see cref="TermParameter.TimeType"/>),
+/// are written in civil time under the run's epoch, from their simulated seconds, so a run that moves
 /// simulated second zero names them on its own clock.</description></item>
 /// <item><term><c>interval_opened</c>, <c>interval_closed</c></term><description>One of the plan's
 /// intervals as the supervision binder opens and closes it, named by its <c>(instance_id, participant,
@@ -1332,7 +1333,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                 json.WriteString("instance_id", instance.InstanceId);
                 json.WriteString("supervision", CoreVocabulary.Name(instance.Supervision));
                 WriteStrings(json, "labels", instance.Labels);
-                WriteParameters(json, instance.Parameters);
+                WriteParameters(json, plan.Vocabulary, instance.Labels, instance.Parameters);
                 WriteStringsOrNull(json, "hard_negative_for", instance.HardNegativeFor);
                 WriteStrings(json, "aoi_refs", instance.AoiRefs);
                 json.WriteStartArray("participants");
@@ -1376,7 +1377,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                 json.WriteString("member_role", series.MemberRole);
                 json.WriteString("supervision", CoreVocabulary.Name(series.Supervision));
                 WriteStrings(json, "labels", series.Labels);
-                WriteParameters(json, series.Parameters);
+                WriteParameters(json, plan.Vocabulary, series.Labels, series.Parameters);
                 WriteStringsOrNull(json, "hard_negative_for", series.HardNegativeFor);
                 json.WriteStartArray("slots");
                 foreach (SeriesSlot slot in series.Slots)
@@ -1401,7 +1402,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                 json.WriteString("flow_id", cohort.FlowId);
                 json.WriteString("supervision", CoreVocabulary.Name(cohort.Supervision));
                 WriteStrings(json, "labels", cohort.Labels);
-                WriteParameters(json, cohort.Parameters);
+                WriteParameters(json, plan.Vocabulary, cohort.Labels, cohort.Parameters);
             });
         }
     }
@@ -1437,13 +1438,30 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         }
     }
 
-    private static void WriteParameters(Utf8JsonWriter json, IReadOnlyDictionary<string, JsonElement> parameters)
+    /// <summary>
+    /// A row's parameters as the plan carries them, except that a time's civil instant is named again from
+    /// its seconds under the run's epoch.
+    /// </summary>
+    private void WriteParameters(Utf8JsonWriter json, PlanVocabulary vocabulary, ImmutableArray<string> labels,
+                                 IReadOnlyDictionary<string, JsonElement> parameters)
     {
         json.WriteStartObject("parameters");
         foreach ((string key, JsonElement value) in parameters)
         {
             json.WritePropertyName(key);
-            value.WriteTo(json);
+            if (!vocabulary.DeclaresTime(labels, key))
+            {
+                value.WriteTo(json);
+                continue;
+            }
+
+            // Its shape is checked where the plan is read.
+            JsonElement seconds = value.GetProperty("seconds");
+            json.WriteStartObject();
+            json.WritePropertyName("seconds");
+            seconds.WriteTo(json);
+            json.WriteString("civil", CivilOnTheRunSClock(seconds.GetDouble()));
+            json.WriteEndObject();
         }
 
         json.WriteEndObject();

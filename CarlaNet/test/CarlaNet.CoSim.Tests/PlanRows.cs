@@ -43,6 +43,44 @@ internal static class PlanRows
         return plan;
     }
 
+    /// <summary>
+    /// A plan document with an author namespace added to its vocabulary, and the vocabulary's digest
+    /// computed again as the compiler computes it.
+    /// </summary>
+    public static JsonObject WithNamespace(JsonObject plan, string name, params JsonObject[] terms)
+    {
+        JsonObject vocabulary = plan["vocabulary"]!.AsObject();
+        vocabulary["namespaces"]!.AsArray().Add(new JsonObject
+        {
+            ["namespace"] = name,
+            ["version"] = 1,
+            ["authority"] = "the test",
+            ["terms"] = new JsonArray(terms.Select(term => (JsonNode?)term).ToArray()),
+        });
+        using JsonDocument digested = JsonDocument.Parse(vocabulary.ToJsonString());
+        plan["vocabulary_digest"] = SupervisionPlan.VocabularyDigestOf(digested.RootElement);
+        return plan;
+    }
+
+    /// <summary>An author term of a vehicle, declaring each parameter given with its type.</summary>
+    public static JsonObject Term(string term, params (string Key, string Type)[] parameters) => new()
+    {
+        ["term"] = term,
+        ["since"] = 1,
+        ["status"] = "active",
+        ["applies_to"] = new JsonArray("entity", "cohort"),
+        ["definition"] = $"{term}, for the test",
+        ["parameters"] = new JsonObject(parameters.Select(parameter => KeyValuePair.Create(
+            parameter.Key, (JsonNode?)new JsonObject { ["type"] = parameter.Type, ["definition"] = parameter.Key }))),
+    };
+
+    /// <summary>A time parameter's value as the compiler writes it, its civil instant under the epoch given.</summary>
+    public static JsonObject Time(long seconds, SolarEpoch epoch) => new()
+    {
+        ["seconds"] = seconds,
+        ["civil"] = SolarEpoch.FormatCivil(epoch.CivilInstantAt(seconds)),
+    };
+
     /// <summary>Write a plan document to a temporary file and read it as a session would.</summary>
     public static SupervisionPlan Read(JsonObject plan)
     {

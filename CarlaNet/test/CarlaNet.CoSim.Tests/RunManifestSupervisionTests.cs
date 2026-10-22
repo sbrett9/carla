@@ -174,6 +174,64 @@ public sealed class RunManifestSupervisionTests : IDisposable
         }
     }
 
+    [RequiresSumoFact]
+    public void ATimeParameterIsWrittenOnTheRunSClockAndEveryOtherParameterAsThePlanCarriesIt()
+    {
+        // The supervised fixture with a time on an instance, the series and the cohort, and an instance's
+        // text that only looks like one. Under the compiled epoch each civil instant is the plan's own.
+        SolarEpoch epoch = SolarLeaseTests.PortEpoch();
+        using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();
+        JsonObject plan = JsonNode.Parse(File.ReadAllText(compiled.Plan))!.AsObject();
+        JsonObject approach = plan["instances"]!.AsArray().Single(row => row!["instance_id"]!.GetValue<string>()
+                                                                        == "Supervised/approach")!.AsObject();
+        approach["parameters"] = new JsonObject
+        {
+            ["expected_at"] = Time(345_600, epoch),
+            ["note"] = "2026-03-25T00:00:00+03:30",
+        };
+        plan["series"]![0]!["parameters"] = new JsonObject { ["relief_at"] = Time(7_200, epoch) };
+        plan["cohorts"]![0]!["parameters"] = new JsonObject { ["formed_at"] = Time(30, epoch) };
+        compiled.WritePlan(WithNamespace(plan, "test",
+            Term("test:approach", ("expected_at", TermParameter.TimeType), ("note", "string")),
+            Term("test:posting", ("relief_at", TermParameter.TimeType)),
+            Term("test:convoy", ("formed_at", TermParameter.TimeType))));
+        compiled.WriteLock(epoch);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        foreach ((string name, SolarEpoch? declared, DateTimeOffset? at, string? expected, string? relief, string? formed) in
+                 new (string, SolarEpoch?, DateTimeOffset?, string?, string?, string?)[]
+                 {
+                     ("moved", epoch, SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+                      "2026-10-26T21:10:00+03:30", "2026-10-22T23:10:00+03:30", "2026-10-22T21:10:30+03:30"),
+                     ("compiled", epoch, null, Planned(approach, "expected_at"), Planned(plan["series"]![0]!, "relief_at"),
+                      Planned(plan["cohorts"]![0]!, "formed_at")),
+                     ("none", null, null, null, null, null),
+                 })
+        {
+            string manifest = Path.Combine(_directory, name + ".jsonl");
+            SumoDriveSessionOptions options = Options(compiled, world, manifest, 1.0);
+            options.Epoch = declared;
+            options.EpochAt = at;
+            using (SumoDriveSession session = SumoDriveSession.Start(options))
+            {
+                session.Advance();
+            }
+
+            List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+            JsonElement parameters = InstanceRow(rows, "Supervised/approach").GetProperty("parameters");
+            _output.WriteLine($"{name}: {parameters.GetRawText()}");
+            Assert.Equal((345_600.0, expected), (parameters.GetProperty("expected_at").GetProperty("seconds").GetDouble(),
+                                                 parameters.GetProperty("expected_at").GetProperty("civil").GetString()));
+            Assert.Equal("2026-03-25T00:00:00+03:30", parameters.GetProperty("note").GetString());
+            Assert.Equal(relief, rows.Single(row => Kind(row) == "series").GetProperty("parameters")
+                                     .GetProperty("relief_at").GetProperty("civil").GetString());
+            Assert.Equal(formed, rows.Single(row => Kind(row) == "cohort").GetProperty("parameters")
+                                     .GetProperty("formed_at").GetProperty("civil").GetString());
+        }
+
+        static string Planned(JsonNode row, string key) => row["parameters"]![key]!["civil"]!.GetValue<string>();
+    }
+
     [Fact]
     public void EveryCivilCopyOfTheShippedBahonarPlanIsItsSecondsUnderTheEpochItsLockRecords()
     {

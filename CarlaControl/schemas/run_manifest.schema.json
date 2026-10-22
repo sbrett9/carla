@@ -1004,7 +1004,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "Its parameters, as the author declared them."
+          "description": "Its parameters, as the author declared them, except that a time parameter is written {\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, null where the run declares no epoch."
         },
         "hard_negative_for": {
           "type": [
@@ -1200,7 +1200,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "Its parameters, as the author declared them."
+          "description": "Its parameters, as the author declared them, except that a time parameter is written {\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, null where the run declares no epoch."
         },
         "hard_negative_for": {
           "type": [
@@ -1304,7 +1304,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "Its parameters, as the author declared them."
+          "description": "Its parameters, as the author declared them, except that a time parameter is written {\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, null where the run declares no epoch."
         }
       },
       "required": [

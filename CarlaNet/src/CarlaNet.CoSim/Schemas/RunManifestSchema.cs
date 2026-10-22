@@ -339,7 +339,7 @@ public static class RunManifestSchema
             new JsonField("instance_id", SchemaJson.Text("The instance: <scenario_id>/<name>.")),
             new JsonField("supervision", SupervisionState()),
             new JsonField("labels", Terms("The terms it is labeled with.")),
-            new JsonField("parameters", SchemaJson.AnyObject("Its parameters, as the author declared them.")),
+            new JsonField("parameters", Parameters()),
             new JsonField("hard_negative_for", OrNull(Terms("The patterns it is a matched negative for; null for none."))),
             new JsonField("aoi_refs", SchemaJson.List("The areas of interest it names.", SchemaJson.Text("An area of interest."))),
             new JsonField("participants", SchemaJson.List("Its participants.",
@@ -374,7 +374,7 @@ public static class RunManifestSchema
             new JsonField("member_role", SchemaJson.Text("The role each slot's vehicle plays.")),
             new JsonField("supervision", SupervisionState()),
             new JsonField("labels", Terms("The terms it is labeled with.")),
-            new JsonField("parameters", SchemaJson.AnyObject("Its parameters, as the author declared them.")),
+            new JsonField("parameters", Parameters()),
             new JsonField("hard_negative_for", OrNull(Terms("The patterns it is a matched negative for; null for none."))),
             new JsonField("slots", SchemaJson.List("Its slots.",
                 SchemaJson.Object("One slot.",
@@ -391,7 +391,7 @@ public static class RunManifestSchema
             new JsonField("flow_id", SchemaJson.Text("The SUMO flow.")),
             new JsonField("supervision", SupervisionState()),
             new JsonField("labels", Terms("The terms its vehicles are labeled with.")),
-            new JsonField("parameters", SchemaJson.AnyObject("Its parameters, as the author declared them.")));
+            new JsonField("parameters", Parameters()));
 
     private static JsonObject WindowSun(string kind, string end)
     {
@@ -597,6 +597,12 @@ public static class RunManifestSchema
 
     private static JsonObject Terms(string description) =>
         SchemaJson.List(description, SchemaJson.Text("A term, namespace:name.", "^[a-z0-9_]+:[a-z0-9_]+$"));
+
+    private static JsonObject Parameters() =>
+        SchemaJson.AnyObject(
+            "Its parameters, as the author declared them, except that a time parameter is written "
+            + "{\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, "
+            + "null where the run declares no epoch.");
 
     private static JsonObject Anchor(string description) =>
         SchemaJson.Text(description + " An anchor is an event of the vehicle's, a stop or a phase with its index "

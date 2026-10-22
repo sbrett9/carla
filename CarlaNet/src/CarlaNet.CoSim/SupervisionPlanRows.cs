@@ -65,7 +65,10 @@ public sealed record PatternInstance
     /// <summary>The terms it asserts, which a nominal instance may carry too.</summary>
     public ImmutableArray<string> Labels { get; }
 
-    /// <summary>Its parameters, keys its labels' terms declare, with the values the author gave.</summary>
+    /// <summary>
+    /// Its parameters, keys its labels' terms declare, with the values the author gave; a time's as its
+    /// seconds and civil instant (<see cref="TermParameter.TimeType"/>).
+    /// </summary>
     public ImmutableSortedDictionary<string, JsonElement> Parameters { get; }
 
     /// <summary>

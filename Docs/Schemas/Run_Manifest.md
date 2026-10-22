@@ -205,7 +205,7 @@ A field marked "No" under Required can be absent altogether.
 **A run that moves simulated second zero.**\
 Such a run keeps the scenario's traffic and moves its clock.\
 `epoch` is the moved epoch and `epoch_moved_from` the compiled one, which the compile lock was checked against.\
-Every civil time the manifest writes is on the run's clock: `civil_begin`, `civil_end`, and each interval's `declared_start_civil` and `declared_end_civil`.
+Every civil time the manifest writes is on the run's clock: `civil_begin`, `civil_end`, each interval's `declared_start_civil` and `declared_end_civil`, and each time parameter's `civil`.
 
 An illumination policy object:
 
@@ -227,7 +227,7 @@ One pattern instance of the supervision plan, as declared.
 | `instance_id` | string | | Yes | The instance: `<scenario_id>/<name>`. Sidecars name it in `<annotation instance>`. |
 | `supervision` | string | | Yes | What the author asserts: `annotated`, `nominal` (an authored negative) or `unlabelled` (no assertion). |
 | `labels` | array of strings | | Yes | Its labels, each `namespace:name`. |
-| `parameters` | object | | Yes | Its parameters, as the author declared them. |
+| `parameters` | object | | Yes | Its parameters, as the author declared them, with a time on the run's clock (below). |
 | `hard_negative_for` | array of strings or null | | Yes | The patterns it is a matched negative for. Null for none. |
 | `aoi_refs` | array of strings | | Yes | The areas of interest it names. |
 | `participants` | array | | Yes | Its participants, each `{"participant", "sumo_id", "role"}`, all strings. |
@@ -247,6 +247,14 @@ An interval as declared:
 | `declared_end_civil` | string or null | | Yes | Its declared end as a civil time under the run's epoch. Null where it declares no end or the run declares no epoch. |
 | `declared_duration_s` | number or null | seconds | Yes | Its declared duration. |
 
+**A time parameter.**\
+A parameter that the row's labels declare of type `time` names an instant.\
+The supervision plan carries it as `{"seconds", "civil"}`, with `civil` on the compiled epoch's clock.\
+The manifest writes the same `seconds` and names `civil` again under the run's epoch, as it does an interval's declared instants.\
+`civil` is null where the run declares no epoch.\
+Every other parameter is written as the plan carries it.\
+This holds for the `parameters` of a series and a cohort too.
+
 ### `series`
 
 One recurring series of the supervision plan, as declared, with its slots.
@@ -259,7 +267,7 @@ One recurring series of the supervision plan, as declared, with its slots.
 | `member_role` | string | | Yes | The role each slot's vehicle plays. |
 | `supervision` | string | | Yes | `annotated`, `nominal` or `unlabelled`. |
 | `labels` | array of strings | | Yes | Its labels. |
-| `parameters` | object | | Yes | Its parameters, as declared. |
+| `parameters` | object | | Yes | Its parameters, as declared, with a time on the run's clock. |
 | `hard_negative_for` | array of strings or null | | Yes | The patterns it is a matched negative for. Null for none. |
 | `slots` | array | | Yes | Its slots, each `{"slot_key": string, "aoi_ref": string, "declared_start_s": number, "declared_end_s": number or null, "entity_id": string}`. |
 
@@ -272,7 +280,7 @@ Every vehicle a SUMO flow emits, as declared.
 | `flow_id` | string | | Yes | The SUMO flow. |
 | `supervision` | string | | Yes | `annotated`, `nominal` or `unlabelled`. |
 | `labels` | array of strings | | Yes | The labels its vehicles carry. |
-| `parameters` | object | | Yes | Its parameters, as declared. |
+| `parameters` | object | | Yes | Its parameters, as declared, with a time on the run's clock. |
 
 ### `sensor_placed`
 
