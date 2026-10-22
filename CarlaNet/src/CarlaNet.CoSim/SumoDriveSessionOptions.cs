@@ -250,8 +250,29 @@ public sealed record SumoDriveSessionOptions(
     /// one the sun is bound to and the one each frame is recorded under -- is
     /// <see cref="SolarEpoch.CivilInstantAt"/> of the simulated instant, so a malformed epoch is
     /// refused where it is built, before anything is started, naming what is wrong with it.
+    ///
+    /// Where <see cref="EpochAt"/> is set, this is the epoch the scenario was compiled against, and the
+    /// run's epoch is this one moved (<see cref="CoSimRunReport.Epoch"/>).
     /// </remarks>
     public SolarEpoch? Epoch { get; set; }
+
+    /// <summary>
+    /// The instant, in UTC, simulated second zero is moved to for this run, or null to keep
+    /// <see cref="Epoch"/>'s own (<see cref="SolarEpoch.ReadInstant"/> reads one from text).
+    /// </summary>
+    /// <remarks>
+    /// <para>The scenario's traffic, unchanged, at another civil time. The session checks the compile lock
+    /// against <see cref="Epoch"/> as given, then runs on <see cref="SolarEpoch.MovedTo"/> of it: the
+    /// sun, every frame's civil instant, the world truth track and the live track take the moved clock.
+    /// The report keeps the epoch moved from
+    /// (<see cref="CoSimRunReport.EpochMovedFrom"/>).</para>
+    ///
+    /// <para>Refused before anything is started without an <see cref="Epoch"/> to move, at an offset
+    /// other than zero, and on a scenario with no compile lock: a move keeps the offset, zone, daylight
+    /// saving and calendar of the epoch a scenario was compiled against, and an uncompiled scenario was
+    /// compiled against none.</para>
+    /// </remarks>
+    public DateTimeOffset? EpochAt { get; set; }
 
     /// <summary>
     /// What the session does with the world's sun across its window.

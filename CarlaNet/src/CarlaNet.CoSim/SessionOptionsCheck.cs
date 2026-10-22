@@ -21,6 +21,7 @@ internal static class SessionOptionsCheck
     internal static void Require(SumoDriveSessionOptions options)
     {
         RequireAnEpoch(options);
+        RequireAnEpochToMove(options);
         RequireAUsablePace(options);
         RequireOneWayToAdvanceTheWorld(options);
         RequireAWindowTheSessionRenders(options);
@@ -83,6 +84,20 @@ internal static class SessionOptionsCheck
             + "the scenario's civil time, and the world truth track carries it, so a session that "
             + "renders a world needs one under every sun policy. Declare what simulated second zero "
             + "means in civil time.");
+    }
+
+    /// <summary>
+    /// Refuse an instant to move simulated second zero to, given with no epoch to move.
+    /// </summary>
+    private static void RequireAnEpochToMove(SumoDriveSessionOptions options)
+    {
+        if (options.EpochAt is { } at && options.Epoch is null)
+        {
+            throw new CoSimSessionRefusedException(
+                $"The session was given {SolarEpoch.FormatUtc(at)} to move simulated second zero to, and no "
+                + "epoch to move. A move keeps the offset, zone, daylight saving and calendar of the epoch the "
+                + "scenario was compiled against: give that epoch with the instant.");
+        }
     }
 
     /// <summary>

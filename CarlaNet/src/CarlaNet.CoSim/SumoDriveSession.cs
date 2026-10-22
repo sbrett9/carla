@@ -174,6 +174,7 @@ public sealed class SumoDriveSession : IDisposable
     private bool _disposed;
 
     private SumoDriveSession(SumoDriveSessionOptions options,
+                             SolarEpoch? epoch,
                              ICarlaWorld? world,
                              SumoConnection sumo,
                              SumoConsoleTail console,
@@ -258,7 +259,10 @@ public sealed class SumoDriveSession : IDisposable
             LayerVisibility = layers?.Applied ?? new Dictionary<string, bool>(),
             DriveLeaseHolder = drive?.Holder,
             DriveLeaseRefused = drive?.Refusal,
-            Epoch = options.Epoch,
+            Epoch = epoch,
+            EpochMovedFrom = epoch is not null && options.Epoch is { } declared && epoch.Digest != declared.Digest
+                ? declared
+                : null,
             Illumination = options.IlluminationInForce,
             SumoSeed = seed,
             RoadMapping = roads.Mapping,
@@ -278,7 +282,7 @@ public sealed class SumoDriveSession : IDisposable
         _track = options.WorldTruthTrackPath is { } trackPath
             ? WorldTruthTrackWriter.Open(trackPath, trackSumoStepsPerSample, clock,
                                          typeId => WorldTruthVehicleType.Read(sumo.TraCI, _binder, catalogue, typeId),
-                                         ground, origin, options.Epoch,
+                                         ground, origin, epoch,
                                          () => Producer.Now(server, release.Release))
             : null;
         try
@@ -604,7 +608,9 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     /// <exception cref="CoSimSessionRefusedException">
     /// The session renders a world under a policy, declared or the default, that binds the
-    /// sun and no epoch to bind it from; the real-time factor or its window is not a usable number;
+    /// sun and no epoch to bind it from; simulated second zero is moved with no epoch to move, to an
+    /// instant not given in UTC, or on a scenario with no compile lock; the real-time factor or its
+    /// window is not a usable number;
     /// the world package does not describe the world the server has loaded; the named SUMO
     /// installation holds no <c>sumo</c>, or no <c>sumo-gui</c> where the GUI was asked for, or the
     /// binary about to be launched is not the release the world package records as its converter and
@@ -703,6 +709,9 @@ public sealed class SumoDriveSession : IDisposable
                                           List<Exception> giveBack)
     {
         SessionOptionsCheck.Require(options);
+
+        // The epoch the run is on: the one given, or that one moved. Read here, once, as the pace is.
+        SolarEpoch? epoch = options.EpochAt is { } at ? options.Epoch!.MovedTo(at) : options.Epoch;
         HeadlightRule? headlights = options.VehicleLampsDriven
             ? new HeadlightRule(options.HeadlightOnBelowDegrees, options.HeadlightOffAboveDegrees)
             : null;
@@ -777,9 +786,10 @@ public sealed class SumoDriveSession : IDisposable
         // Whether the files SUMO would run are the ones the scenario's compile lock binds, compiled
         // against this catalogue and this epoch, and whether the compiler ran them in SUMO alone before
         // writing them -- or, with no lock beside them, that the scenario is an uncompiled one, which
-        // runs and is reported as such.
-        ScenarioLockCheck compiled = ScenarioLockCheck.Require(options.ScenarioPath, catalogue,
-                                                               options.Epoch, options.AcceptSkippedDryRun);
+        // runs and is reported as such. A run that moves simulated second zero is checked against the
+        // epoch it moves.
+        ScenarioLockCheck compiled = ScenarioLockCheck.Require(options.ScenarioPath, catalogue, options.Epoch,
+                                                               options.EpochAt, options.AcceptSkippedDryRun);
 
         // And whether SUMO would teleport a blocked vehicle, which the interpolation would render as a
         // body dragged along its route.
@@ -889,7 +899,7 @@ public sealed class SumoDriveSession : IDisposable
                     pool = world is { } bodies
                         ? new VehicleBodyPool(bodies, VehicleParking.BeyondTheSurface(ground))
                         : null;
-                    session = new SumoDriveSession(options, world, sumo, console, release, compiled,
+                    session = new SumoDriveSession(options, epoch, world, sumo, console, release, compiled,
                                                    teleporting, routeErrors, distributionEdits,
                                                    collisionHandling, laneChanges, headlights, clock,
                                                    network, ground, roads, catalogue, lease, drive,
@@ -1265,7 +1275,7 @@ public sealed class SumoDriveSession : IDisposable
             return;
         }
 
-        _sun = SolarLease.Take(world, new DeclaredSun(_options.Epoch!, policy, WindowOpensAtSeconds));
+        _sun = SolarLease.Take(world, new DeclaredSun(Report.Epoch!, policy, WindowOpensAtSeconds));
         Report.Sun = _sun;
         if (_sun.AtWindowOpen is { } opened)
         {
@@ -1919,7 +1929,7 @@ public sealed class SumoDriveSession : IDisposable
     /// </summary>
     private IlluminationDeclaration Declare(IlluminationPolicy policy, SolarAuditSample? sample)
     {
-        SolarEpoch? epoch = _options.Epoch;
+        SolarEpoch? epoch = Report.Epoch;
         DateTimeOffset? civil = epoch?.CivilInstantAt(RenderedTimeSeconds);
         var declared = new IlluminationDeclaration(
             policy.Name, policy.HonoursTheEpoch && _sun is { NoSun: false }, sample is not null)

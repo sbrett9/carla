@@ -2467,7 +2467,7 @@ class World:
                          fixed_delta=0.05, record_hz=2.0,
                          warm_up_to=0.0, window_opens_at=None, step_length=None,
                          road_layer_visible=False, signal_layer_visible=False,
-                         epoch=None, illumination=None,
+                         epoch=None, epoch_at=None, illumination=None,
                          real_time_factor=0.0, pacing_window_s=5.0,
                          sumo_home=None, allow_sumo_version_mismatch=False, sumo_gui=False,
                          allow_teleporting=False, accept_skipped_dry_run=False,
@@ -2642,7 +2642,20 @@ class World:
         of a scenario.json, as a dict or its JSON text: `civil_datetime` with its numeric offset,
         `utc_offset_hours`, the same instant again as `utc_datetime`, `calendar_advances`,
         `dst_in_effect`, and optionally `time_zone_id` (carried, never resolved) and `note`. A
-        malformed one is refused, naming every rule it breaks. `illumination` says what the sun does
+        malformed one is refused, naming every rule it breaks.
+
+        `epoch_at` moves simulated second zero for this run: the UTC date and time, as text, that
+        second zero is to be -- '2026-10-22T17:40:00Z', with up to seven digits of fraction, the 'Z'
+        optional and '+00:00' read as 'Z'. Any other offset is refused, naming the same instant in UTC.
+        `epoch` is then the epoch the scenario was compiled against, which the compile lock is checked
+        against as given, and the run is on that epoch moved: its civil date and time and its UTC
+        instant are the new instant at the epoch's own offset, its note says where it was moved from,
+        and its offset, daylight saving, zone and calendar are kept. The traffic is unchanged; the sun,
+        every frame's civil instant, the stills' names and stamps, the world truth track and the live
+        track take the moved clock. `epoch_at` is refused before anything starts without `epoch`, and
+        on a scenario with no compile lock beside it. `session.Report.Epoch` is the run's epoch and
+        `session.Report.EpochMovedFrom` the compiled one, or None where nothing moved: an `epoch_at`
+        that is the epoch's own instant moves nothing. `illumination` says what the sun does
         across the window -- the `illumination` object, as a dict or JSON, or just a policy name:
         'freeze_at_window_start', 'advance' (with `rate_sun_s_per_sim_s`), 'freeze_at' (with
         `freeze_at_civil_time`) or 'ignore'. Left as None, a session that renders a world runs under
@@ -2710,9 +2723,11 @@ class World:
         the scenario compiler writes it). The session refuses, before SUMO is started, a scenario
         whose configuration, route file or network is not the one the lock digests, or whose lock
         records another catalogue digest than `catalogue` declares, or another epoch than `epoch`
-        digests as -- naming every disagreement. A scenario with no lock beside it runs as an
-        uncompiled one. `session.Report.CompileLock` says which, and for a compiled scenario the
-        SUMO release that routed it and the world it was compiled for.
+        digests as -- naming every disagreement. Under `epoch_at` the lock is compared with `epoch`
+        as given, before it is moved. A scenario with no lock beside it runs as an uncompiled one.
+        `session.Report.CompileLock` says which, and for a compiled scenario the SUMO release that
+        routed it and the world it was compiled for; its `EpochMovedTo` is the instant `epoch_at`
+        moved simulated second zero to, or None.
 
         The lock also says whether the compiler ran the scenario in SUMO alone before writing it
         (its check 59), which is what finds a vehicle the supervision plan names that never enters
@@ -2917,14 +2932,16 @@ class World:
                                          else _json.dumps(run_manifest_header))
         options.CollisionDetail = bool(collision_detail)
         options.RenderSet = policy
-        # All three are read by the C# side, which is the one validator: a declaration checked twice
-        # is a declaration two implementations will eventually disagree about.
+        # Each is read by the C# side, which is the one validator: a declaration checked twice is a
+        # declaration two implementations will eventually disagree about.
         if live_track is not None:
             options.LiveTrack = LiveTrackOptions.FromJson(
                 live_track if isinstance(live_track, str) else _json.dumps(live_track))
         if epoch is not None:
             options.Epoch = SolarEpoch.FromJson(
                 epoch if isinstance(epoch, str) else _json.dumps(epoch))
+        if epoch_at is not None:
+            options.EpochAt = SolarEpoch.ReadInstant(str(epoch_at), "epoch_at")
         if illumination is not None:
             if isinstance(illumination, str) and not illumination.lstrip().startswith("{"):
                 illumination = {"illumination_version": 1, "policy": illumination}

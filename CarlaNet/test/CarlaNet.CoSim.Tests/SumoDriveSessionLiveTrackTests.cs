@@ -74,6 +74,32 @@ public sealed class SumoDriveSessionLiveTrackTests
         }
     }
 
+    [RequiresSumoFact]
+    public void ARunThatMovesSimulatedSecondZeroStampsEachSampleOnTheMovedClock()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        SumoDriveSessionOptions options = Options(world, compiled.Scenario,
+                                                  new RecordedWorld { Loaded = world.AsLoaded() },
+                                                  new LiveTrackOptions());
+        options.EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+        SolarEpoch moved = SolarLeaseTests.PortEpoch().MovedTo(options.EpochAt.Value);
+
+        List<JsonElement> samples;
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            samples = Drive(session, 60);
+        }
+
+        Assert.NotEmpty(samples);
+        foreach (JsonElement sample in samples)
+        {
+            DateTime civil = moved.CivilInstantAt(sample.GetProperty("sim_time_s").GetDouble()).UtcDateTime;
+            Assert.Equal(CotWriter.Timestamp(civil), sample.GetProperty("time_utc").GetString());
+            Assert.StartsWith("2026-10-22T17:40:0", sample.GetProperty("time_utc").GetString());
+        }
+    }
+
     [RequiresSumoTheory]
     [InlineData(1.0, 20)]
     [InlineData(2.0, 10)]

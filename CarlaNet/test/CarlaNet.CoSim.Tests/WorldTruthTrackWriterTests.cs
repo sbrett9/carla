@@ -399,6 +399,43 @@ public sealed class WorldTruthTrackWriterTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void ARunThatMovesSimulatedSecondZeroStampsEveryRowOnTheMovedClock()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string track = Path.Combine(_directory, "track.csv");
+        var options = new SumoDriveSessionOptions(
+            compiled.Scenario, world.PackagePath, CoSimFixtures.VehicleCatalogue,
+            "test://" + Guid.NewGuid().ToString("n"))
+        {
+            World = new RecordedWorld { Loaded = world.AsLoaded() },
+            Epoch = SolarLeaseTests.PortEpoch(),
+            EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+            WorldTruthTrackPath = track,
+        };
+        SolarEpoch moved = SolarLeaseTests.PortEpoch().MovedTo(options.EpochAt.Value);
+
+        using (SumoDriveSession session = SumoDriveSession.Start(options))
+        {
+            for (int step = 0; step < 60 && session.Advance(); step++)
+            {
+            }
+        }
+
+        List<Row> rows = ReadRows(File.ReadAllText(track), out _);
+        Assert.NotEmpty(rows);
+        foreach (Row row in rows)
+        {
+            DateTime civil = moved.CivilInstantAt(double.Parse(row["sim_time_s"], CultureInfo.InvariantCulture))
+                .UtcDateTime;
+            Assert.Equal(civil.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture) + "Z",
+                         row["time_utc"]);
+            Assert.StartsWith("2026-10-22T17:40:0", row["time_utc"]);
+        }
+    }
+
+    [RequiresSumoFact]
     public void AWorldThatReportsOnlyTheGeometricElevationHasItsBandCutFromThatAndSaysSo()
     {
         using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");

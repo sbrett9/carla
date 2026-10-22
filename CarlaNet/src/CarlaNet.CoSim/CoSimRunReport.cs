@@ -161,8 +161,19 @@ public sealed class CoSimRunReport
     /// </remarks>
     public required RealTimePacer Pacing { get; init; }
 
-    /// <summary>What simulated second zero meant in civil time, as the run declared it.</summary>
+    /// <summary>
+    /// What simulated second zero meant in civil time for this run: the epoch declared, or that epoch
+    /// moved to <see cref="SumoDriveSessionOptions.EpochAt"/>. Every civil instant the run derived is
+    /// this epoch's.
+    /// </summary>
     public SolarEpoch? Epoch { get; init; }
+
+    /// <summary>
+    /// The epoch <see cref="Epoch"/> was moved from at run time -- the one the scenario was compiled
+    /// against, which the compile lock was checked against -- or null where the run kept its epoch's
+    /// instant.
+    /// </summary>
+    public SolarEpoch? EpochMovedFrom { get; init; }
 
     /// <summary>The simulated instant of the first frame the session rendered.</summary>
     public double FirstRenderedSeconds { get; internal set; }
@@ -897,6 +908,10 @@ public sealed class CoSimRunReport
         if (Epoch is { } epoch)
         {
             text.AppendLine($"epoch              {epoch}; digest {epoch.Digest[..12]}");
+            if (EpochMovedFrom is { } compiled)
+            {
+                text.AppendLine($"  moved from       the compiled epoch: {compiled}; digest {compiled.Digest[..12]}");
+            }
         }
 
         double prewarm = WindowOpensAtSeconds - FirstRenderedSeconds;
