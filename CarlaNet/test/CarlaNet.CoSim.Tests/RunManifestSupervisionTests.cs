@@ -232,6 +232,47 @@ public sealed class RunManifestSupervisionTests : IDisposable
         static string Planned(JsonNode row, string key) => row["parameters"]![key]!["civil"]!.GetValue<string>();
     }
 
+    [RequiresSumoFact]
+    public void TheShippedBahonarPlanMovedToStartAt1740ZIsWrittenOnTheMovedClock()
+    {
+        string scenario = ScenarioLockCheckTests.RepositoryFile("Import", "Shahid_Bahonar_Port_PatternOfLife.sumocfg");
+        JsonNode locked = JsonNode.Parse(File.ReadAllText(ScenarioLockCheck.LockPathFor(scenario)))!;
+        string manifest = Path.Combine(_directory, "bahonar.jsonl");
+        var options = new SumoDriveSessionOptions(
+            scenario,
+            ScenarioLockCheckTests.RepositoryFile("CarlaControl", "Examples", "Scenarios", "Bahonar", "Shahid_Bahonar_Port.cwp"),
+            CoSimFixtures.VehicleCatalogue, "test://" + Guid.NewGuid().ToString("n"))
+        {
+            TickWorld = () => true,
+            Epoch = SolarEpoch.FromJson(locked["epoch"]!.ToJsonString()),
+            EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+            RunManifestPath = manifest,
+        };
+        using (SumoDriveSession.Start(options))
+        {
+        }
+
+        List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+        Assert.Equal("2026-10-22T21:10:00+03:30",
+                     rows[0].GetProperty("solar").GetProperty("epoch").GetProperty("civil_datetime").GetString());
+        JsonElement shift = InstanceRow(rows, "Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4")
+            .GetProperty("parameters").GetProperty("expected_shift_start");
+        Assert.Equal((345_600.0, "2026-10-26T21:10:00+03:30"),
+                     (shift.GetProperty("seconds").GetDouble(), shift.GetProperty("civil").GetString()));
+
+        // The escort transits' declared starts, the perimeter shadow's and the ferry stay-behind's end.
+        Assert.Equal(["2026-10-26T00:10:00+03:30", "2026-10-26T00:10:04+03:30", "2026-10-26T00:10:08+03:30",
+                      "2026-10-26T00:10:12+03:30", "2026-10-26T00:10:16+03:30"],
+                     Intervals("pi_escort_drydock_d3").Select(interval => interval.GetProperty("declared_start_civil").GetString()));
+        Assert.Equal("2026-10-28T16:40:00+03:30",
+                     Assert.Single(Intervals("pi_perimeter_shadow_d6")).GetProperty("declared_start_civil").GetString());
+        Assert.Equal("2026-10-29T21:10:00+03:30",
+                     Assert.Single(Intervals("pi_ferry_stay_behind_d1")).GetProperty("declared_end_civil").GetString());
+
+        JsonElement[] Intervals(string name) =>
+            [.. InstanceRow(rows, $"Shahid_Bahonar_Port_PatternOfLife/{name}").GetProperty("intervals").EnumerateArray()];
+    }
+
     [Fact]
     public void EveryCivilCopyOfTheShippedBahonarPlanIsItsSecondsUnderTheEpochItsLockRecords()
     {
