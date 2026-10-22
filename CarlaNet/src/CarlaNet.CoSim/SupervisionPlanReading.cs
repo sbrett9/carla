@@ -171,6 +171,23 @@ internal sealed class SupervisionPlanReading
     }
 
     /// <summary>
+    /// A parameter whose labels declare it a time (<see cref="TermParameter.TimeType"/>): an object of a
+    /// finite <c>seconds</c> and a non-empty <c>civil</c>.
+    /// </summary>
+    public void TimeParameter(JsonElement value, string where)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            Problem(where, $"is {Shown(value)}, and its labels declare it a time, which the compiler writes as "
+                           + "an object of its seconds and its civil instant");
+            return;
+        }
+
+        Number(value, "seconds", where);
+        Text(value, "civil", where);
+    }
+
+    /// <summary>
     /// A map of named declarations, each an object read by <paramref name="read"/>; absent is empty
     /// where it is not <paramref name="required"/>.
     /// </summary>

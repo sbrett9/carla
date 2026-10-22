@@ -49,6 +49,20 @@ public sealed record PlanVocabulary
     /// <summary>Every author namespace, in the plan's order (by name).</summary>
     public ImmutableArray<AuthorNamespace> Namespaces { get; }
 
+    /// <summary>
+    /// Whether a row's parameter is a time: at least one of the row's labels' terms declares the key, and
+    /// every one that does declares it <see cref="TermParameter.TimeType"/>.
+    /// </summary>
+    public bool DeclaresTime(IEnumerable<string> labels, string parameter)
+    {
+        ArgumentNullException.ThrowIfNull(labels);
+        TermParameter[] declaring = [.. labels
+            .SelectMany(label => Namespaces.SelectMany(space => space.Terms).Where(term => term.Term == label))
+            .Select(term => term.Parameters.GetValueOrDefault(parameter))
+            .OfType<TermParameter>()];
+        return declaring.Length > 0 && declaring.All(declared => declared.Type == TermParameter.TimeType);
+    }
+
     internal static PlanVocabulary Read(JsonElement json, string digest, SupervisionPlanReading reading,
                                         string where) => new(json, digest, reading, where);
 
@@ -207,6 +221,17 @@ public sealed record AuthorTerm
 /// <summary>One parameter a term declares: its type, its unit where it has one, and what it means.</summary>
 public sealed record TermParameter
 {
+    /// <summary>
+    /// The type of a parameter that names an instant. Its value in a plan is
+    /// <c>{"seconds": s, "civil": text}</c>: the simulated second from step 0 its author's time resolved
+    /// to, and that second's civil instant under the compiled epoch.
+    /// </summary>
+    /// <remarks>
+    /// The second is what a run's manifest names the instant from, under the run's epoch, so the value
+    /// moves with a run that moves simulated second zero (<see cref="RunManifestWriter"/>).
+    /// </remarks>
+    public const string TimeType = "time";
+
     private TermParameter(JsonElement json, SupervisionPlanReading reading, string where)
     {
         Type = reading.Text(json, "type", where);
@@ -214,7 +239,7 @@ public sealed record TermParameter
         Definition = reading.Text(json, "definition", where);
     }
 
-    /// <summary><c>number</c>, <c>integer</c>, <c>string</c> or <c>boolean</c>.</summary>
+    /// <summary><c>number</c>, <c>integer</c>, <c>string</c>, <c>boolean</c> or <c>time</c> (<see cref="TimeType"/>).</summary>
     public string Type { get; }
 
     /// <summary>Its unit, or null.</summary>

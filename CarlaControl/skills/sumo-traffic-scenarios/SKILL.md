@@ -186,6 +186,13 @@ Every scenario declares what civil instant `t = 0` is — the `epoch` object:
 6. **Declare the offset in force on the scenario's dates**, with `dst_in_effect` saying whether it
    includes daylight saving: Colorado in late March is −06:00 with `dst_in_effect: true`. One offset holds
    for the whole run.
+7. **Moving `t = 0` for one run needs no recompile.** `carla-drive --epoch-at` and `carla-capture`'s
+   `scenario.epoch_at` (`--epoch-at`) take the UTC instant step 0 is to be, the `Z` optional and any
+   other offset refused. The traffic is the same, second for second; the run shows the instant at the
+   scenario's own offset, and the sun, the stills, the truth and the manifest follow it. Bahonar's step 0
+   is the 07:00 shift change, so `--epoch-at 2026-10-23T03:30:00Z` puts it at 07:00 local on 23 October.
+   The compile lock is checked against the compiled epoch, so only a compiled scenario moves; the
+   offset, zone, daylight saving and calendar move only with a recompile.
 
 The utc_datetime must be the civil instant minus the offset; the commonest error — the offset applied
 in the wrong direction — is refused and named.
@@ -256,8 +263,8 @@ block:
     "parameters": {
       "expected_tower": {"type": "string",
                          "definition": "the tower the guard was due to relieve, as the id of its area of interest"},
-      "expected_shift_start": {"type": "string",
-                               "definition": "the civil date and time, with its UTC offset, at which the shift it was due to take up began"}},
+      "expected_shift_start": {"type": "time",
+                               "definition": "when the shift it was due to take up began"}},
     "counterfactual": {"kind": "term", "ref": "bahonar:tower_posting"}},
    {"term": "bahonar:tower_posting", "since": 1, "status": "active", "applies_to": ["entity"],
     "definition": "An eight-hour authored guard posting at a perimeter tower: a long parked dwell, in a legitimate place, for a legitimate reason.",
@@ -271,7 +278,7 @@ block:
                   "intervals": [{"participant": "offpost_d4_h7_t3", "phase": "dwell",
                                  "anchor": {"start": "stop:0", "end": "stop_end:0"}}],
                   "parameters": {"expected_tower": "tower_03",
-                                 "expected_shift_start": "2026-10-03T07:00:00+03:30"}}],
+                                 "expected_shift_start": "d4 07:00"}}],
    "series": [{"series_id": "tower_relief", "rota": "guard_posting", "member_role": "bahonar:guard",
                "slot_length": "8h", "supervision": "nominal", "labels": ["bahonar:tower_posting"]}]}}
 ```
@@ -289,9 +296,12 @@ leaves the post. How to author one well:
   different body, base, departure or stay would be a second signal the label does not name.
 - **Name where it was expected, and when, in the term's `parameters`.** Declare each key on the term
   with its `type` and `definition`, and give the values on the instance (check 56): `expected_tower`
-  is the tower's area of interest and `expected_shift_start` the shift's civil instant at the epoch's
-  offset. The empty place reaches the record as a magnitude of the vehicle's label, never as a label
-  of its own.
+  is the tower's area of interest and `expected_shift_start`, declared `time`, the shift change
+  `d4 07:00`, written as the guard's own departure is. The plan carries it as
+  `{"seconds": 345600.0, "civil": "2026-10-03T07:00:00+03:30"}`; a run's manifest writes `civil` again
+  on the run's epoch, so under `--epoch-at 2026-10-22T17:40:00Z` it reads `2026-10-26T21:10:00+03:30`.
+  The empty place reaches the record as a magnitude of the vehicle's label, never as a label of its
+  own.
 - **Anchor the interval to the vehicle's own events**: `{"start": "stop:0", "end": "stop_end:0"}` spans
   the parked shift from when SUMO has it arrive to when it leaves (check 58). The instance has one
   participant, with role `subject` (checks 19, 50).
@@ -347,8 +357,12 @@ carries none, and the compiler refuses a route file carrying anything but the ve
   the model trainer, and this pipeline carries it without judging it. Ask for the author's words.
 - **A subject's magnitudes go in `parameters`** — on an instance, a series or a cohort — and
   each key must be declared in the `parameters{}` of one of its labels' terms, with a `type`
-  (`number`, `integer`, `string`, `boolean`), a `unit` where it has one and a `definition`. An
+  (`number`, `integer`, `string`, `boolean`, `time`), a `unit` where it has one and a `definition`. An
   undeclared key, or a value of another type, is refused (check 56); there is no free-form attribute map.
+- **A parameter that names a time is declared `time`**, and its value is written as any other time:
+  `"d4 07:00"`, `{"instant": "name"}`, `{"at": …, "plus": …}`. The compiler resolves it as it resolves
+  an interval's begin (check 47), and the plan carries `{"seconds": …, "civil": …}`. Never write a
+  computed civil string into a `string` parameter instead: it stays text, and nothing reads it as a time.
 - A term carried by `nominal` subjects may declare `hard_negative_for`; the plan copies it onto them, so
   restate it on a subject only exactly, or not at all (check 57). A term's `exemplar_instances` name
   instances of this scenario by their authored names, and each must resolve (check 8).

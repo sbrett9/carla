@@ -13,7 +13,9 @@ expectations (`expect.<path>`, check 35) are checked against `values()`, the sam
 dotted paths under `launch_echo.`.
 
 **Every figure comes from the code that will act on it.** The civil instants are
-`ScenarioEpoch.civil_instant_at` (the session's `SolarEpoch`); the sun is `WindowSun` (the session's
+`ScenarioEpoch.civil_instant_at` (the session's `SolarEpoch`) under the run's epoch: the scenario's,
+or that epoch moved to `scenario.epoch_at` by the session's own move, so the echo names it by the
+digest the run's records give it. The sun is `WindowSun` (the session's
 `DeclaredSun` and `SolarPositionModel`), evaluated with the window opening at its own begin -- the
 instant `CaptureSession` hands the session as `window_opens_at`, where it pins a frozen sun and
 anchors an advancing one, the prewarm before it lit by that same sun; the disk figure is check 19's;
@@ -86,7 +88,8 @@ class LaunchEcho:
                 warning_codes: list[str]) -> LaunchEcho:
         """Compute the block. The configuration must have passed the offline checks."""
         window = effective.window
-        epoch = ScenarioEpoch.read(effective.epoch_object())
+        epoch = effective.run_epoch
+        moved = epoch.digest != ScenarioEpoch.read(effective.epoch_object()).digest
         hz = float(effective.value("capture.capture_hz"))
         channels = effective.channel_count
         per_channel = int(window.length_s * hz)
@@ -108,7 +111,10 @@ class LaunchEcho:
             "civil": {"begin": epoch.civil_instant_at(window.begin_s),
                       "end": epoch.civil_instant_at(window.end_s),
                       "first_rendered": epoch.civil_instant_at(effective.first_rendered_s),
-                      "epoch": epoch.describe()},
+                      "epoch": epoch.describe(),
+                      "epoch_block_sha256": epoch.digest,
+                      "scenario_epoch_block_sha256": effective.value("scenario.epoch_block_sha256"),
+                      "epoch_at": epoch.utc_datetime if moved else None},
             "sun": cls._sun(effective, epoch),
             "world": {"map_name": effective.value("world.map_name"),
                       "package": effective.world.path.name,
@@ -306,6 +312,10 @@ class LaunchEcho:
                   f"              end: {sim['end_source']}; prewarm {sim['prewarm_s']:g} s from "
                   f"t={sim['first_rendered_s']:,.0f}",
                   f"  civil       {civil['begin']}  ->  {civil['end']}"]
+        if civil["epoch_at"] is not None:
+            lines.append(f"  epoch       moved at run time to {civil['epoch_at']} by "
+                         f"scenario.epoch_at, from the compiled epoch "
+                         f"{civil['scenario_epoch_block_sha256'][:12]}: {civil['epoch']}")
         if sun["binds"]:
             begin, end = sun["at_begin"], sun["at_end"]
             lines.append(f"  sun         elevation {begin['elevation_deg']:+.2f} deg -> "

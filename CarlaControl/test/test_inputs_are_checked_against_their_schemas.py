@@ -206,8 +206,8 @@ def drive():
 
 
 def declaration(drive, path: Path):
-    arguments = argparse.Namespace(epoch=str(path), illumination=None, solar_rate=None,
-                                   freeze_at=None, freeze_date_advances=False,
+    arguments = argparse.Namespace(epoch=str(path), epoch_at=None, illumination=None,
+                                   solar_rate=None, freeze_at=None, freeze_date_advances=False,
                                    no_sun_required=False)
     return importlib.import_module("carlacontrol.SunDeclaration").SunDeclaration(arguments)
 

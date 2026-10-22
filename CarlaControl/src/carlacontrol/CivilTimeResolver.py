@@ -1,7 +1,8 @@
 """Civil time as an authoring construct: an author writes 07:00 and the compiler emits 25200.
 
 Every time a specification takes -- a departure, a flow window, a stop, a capture window, an
-interval -- may be written in any of these forms, and resolves to simulated seconds under the epoch:
+interval, a `time` parameter -- may be written in any of these forms, and resolves to simulated
+seconds under the epoch:
 
 | Form | Example | Resolves to |
 |---|---|---|

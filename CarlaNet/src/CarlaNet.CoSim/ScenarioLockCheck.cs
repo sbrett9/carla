@@ -37,7 +37,10 @@ namespace CarlaNet.CoSim;
 /// <item><b>The epoch</b>, where the session declares one: <see cref="SolarEpoch.Digest"/> of it,
 /// against the lock's <c>epoch_block_sha256</c>, which the compiler computes with the same function.
 /// A session that declares no epoch binds no sun and derives no civil instant, so there is nothing to
-/// disagree with, and the report says it was not compared.</item>
+/// disagree with, and the report says it was not compared. A run that moves simulated second zero
+/// (<see cref="SumoDriveSessionOptions.EpochAt"/>) is checked against the epoch it moves, which must be
+/// the compiled one; the session runs on <see cref="SolarEpoch.MovedTo"/> of it, which differs from it
+/// in the instant alone, so every other binding the epoch carries is checked unchanged.</item>
 /// </list>
 /// <para>Every disagreement is named in one refusal. The routing release and the lock's world
 /// identity are recorded on the run report, not compared: the world is compared by the checks that
@@ -54,7 +57,9 @@ namespace CarlaNet.CoSim;
 /// <para><b>No lock is not a refusal.</b> A scenario a generator wrote directly as SUMO files has no
 /// lock, and it runs. The report records it as uncompiled, so a run of one can never be mistaken for a
 /// run of a compiled scenario. Its supervision is not read: a <c>.supervision.json</c> beside an
-/// uncompiled scenario is nothing a lock binds, and may be a legacy sidecar of the same name.</para>
+/// uncompiled scenario is nothing a lock binds, and may be a legacy sidecar of the same name. A run that
+/// moves simulated second zero on one is refused: a move keeps the offset, zone, daylight saving and
+/// calendar of the epoch the scenario was compiled against, and an uncompiled scenario has none.</para>
 ///
 /// <para><b>A lock that names no plan is not a refusal either.</b> Every lock the compiler writes names
 /// one, since every compile writes a plan; a lock without one binds no supervision, and the run binds
@@ -95,11 +100,12 @@ public sealed class ScenarioLockCheck
     private static readonly string[] AdditionalOptionNames = ["additional-files", "additional", "a"];
 
     private ScenarioLockCheck(string expectedLockPath, ScenarioLock? locked, bool epochCompared,
-                              SupervisionPlan? plan, bool skippedDryRunAccepted)
+                              DateTimeOffset? epochMovedTo, SupervisionPlan? plan, bool skippedDryRunAccepted)
     {
         ExpectedLockPath = expectedLockPath;
         Lock = locked;
         EpochCompared = epochCompared;
+        EpochMovedTo = epochMovedTo;
         Plan = plan;
         SkippedDryRunAccepted = skippedDryRunAccepted;
     }
@@ -115,6 +121,12 @@ public sealed class ScenarioLockCheck
 
     /// <summary>Whether the epoch was compared: a lock was found and the session declares an epoch.</summary>
     public bool EpochCompared { get; }
+
+    /// <summary>
+    /// The instant the run moves simulated second zero to, where it moves it from the compiled epoch's
+    /// own; null where the run keeps the compiled epoch's instant.
+    /// </summary>
+    public DateTimeOffset? EpochMovedTo { get; }
 
     /// <summary>
     /// The supervision plan the lock binds, read and bound to the files the session runs: every row the
@@ -193,15 +205,61 @@ public sealed class ScenarioLockCheck
     /// refusal.
     /// </exception>
     public static ScenarioLockCheck Require(string scenarioPath, VehicleCatalogue catalogue,
-                                            SolarEpoch? epoch, bool acceptSkippedDryRun)
+                                            SolarEpoch? epoch, bool acceptSkippedDryRun) =>
+        Require(scenarioPath, catalogue, epoch, epochMovedTo: null, acceptSkippedDryRun);
+
+    /// <summary>
+    /// Check the scenario against its compile lock, and its supervision plan against both, for a run that
+    /// may move simulated second zero; or record that it has no lock.
+    /// </summary>
+    /// <param name="scenarioPath">The scenario's SUMO configuration.</param>
+    /// <param name="catalogue">The catalogue the session loads.</param>
+    /// <param name="epoch">
+    /// The epoch the session declares, or null where it declares none; where the run moves simulated
+    /// second zero, the epoch it moves, which is compared with the lock's as given.
+    /// </param>
+    /// <param name="epochMovedTo">
+    /// The instant the run moves simulated second zero to (<see cref="SumoDriveSessionOptions.EpochAt"/>),
+    /// or null where it moves nothing.
+    /// </param>
+    /// <param name="acceptSkippedDryRun">
+    /// The run accepted explicitly a lock whose compile skipped its SUMO-only run, or records none
+    /// (<see cref="SumoDriveSessionOptions.AcceptSkippedDryRun"/>).
+    /// </param>
+    /// <returns>What was found, for the run report, with the plan for the session to bind.</returns>
+    /// <exception cref="ArgumentException">An instant to move to is given with no epoch to move.</exception>
+    /// <exception cref="CoSimSessionRefusedException">
+    /// The run moves simulated second zero and no lock sits beside the configuration; a lock sits beside
+    /// it and cannot be read; the files, the catalogue or the epoch disagree with it; the plan it names is
+    /// not there, cannot be bound, or was compiled against other files; or the lock says the compile
+    /// skipped its SUMO-only run, or records none, and <paramref name="acceptSkippedDryRun"/> is not set.
+    /// Every disagreement of one kind is named in one refusal.
+    /// </exception>
+    public static ScenarioLockCheck Require(string scenarioPath, VehicleCatalogue catalogue, SolarEpoch? epoch,
+                                            DateTimeOffset? epochMovedTo, bool acceptSkippedDryRun)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(scenarioPath);
         ArgumentNullException.ThrowIfNull(catalogue);
+        if (epochMovedTo is not null && epoch is null)
+        {
+            throw new ArgumentException("An instant to move simulated second zero to needs the epoch it moves.",
+                                        nameof(epochMovedTo));
+        }
 
         string lockPath = LockPathFor(scenarioPath);
         if (!System.IO.File.Exists(lockPath))
         {
-            return new ScenarioLockCheck(lockPath, null, epochCompared: false, plan: null,
+            if (epochMovedTo is { } uncompiledMove)
+            {
+                throw new CoSimSessionRefusedException(
+                    $"The run moves simulated second zero to {SolarEpoch.FormatUtc(uncompiledMove)}, and the "
+                    + $"scenario {scenarioPath} has no compile lock at {lockPath}. A move keeps the offset, zone, "
+                    + "daylight saving and calendar of the epoch a scenario was compiled against, and an "
+                    + "uncompiled scenario was compiled against none. SUMO has not been started. Give the "
+                    + "session an epoch at the instant wanted, with no move.");
+            }
+
+            return new ScenarioLockCheck(lockPath, null, epochCompared: false, epochMovedTo: null, plan: null,
                                          skippedDryRunAccepted: false);
         }
 
@@ -304,11 +362,17 @@ public sealed class ScenarioLockCheck
                               + ", so its vehicle types may name bodies measured differently or not at all");
         }
 
-        if (epoch is not null && !string.Equals(epoch.Digest, locked.EpochDigest, StringComparison.Ordinal))
+        bool epochDisagrees = epoch is not null
+                              && !string.Equals(epoch.Digest, locked.EpochDigest, StringComparison.Ordinal);
+        if (epochDisagrees)
         {
-            disagreements.Add($"the session's epoch ({epoch}) digests as {epoch.Digest} and the scenario "
+            disagreements.Add($"the session's epoch ({epoch}) digests as {epoch!.Digest} and the scenario "
                               + $"was compiled against the epoch {locked.EpochDigest}, so every civil "
-                              + "instant its resolution report states was resolved against another t = 0");
+                              + "instant its resolution report states was resolved against another t = 0"
+                              + (epochMovedTo is { } moving
+                                  ? $"; the run moves simulated second zero to {SolarEpoch.FormatUtc(moving)}, "
+                                    + "which moves the compiled epoch and no other"
+                                  : string.Empty));
         }
 
         if (disagreements.Count > 0)
@@ -319,7 +383,11 @@ public sealed class ScenarioLockCheck
                 + ". The compiler's output is byte-reproducible, so a file whose digest has moved was "
                 + "changed after it was compiled, and the traffic it produces is not the traffic the lock "
                 + "and the resolution report describe. SUMO has not been started. Recompile the scenario, "
-                + "or give the session the catalogue and epoch it was compiled against.");
+                + "or give the session the catalogue and epoch it was compiled against."
+                + (epochDisagrees
+                    ? " To run the scenario's traffic at another civil time, keep the compiled epoch and move "
+                      + "simulated second zero (EpochAt; carla-drive --epoch-at; carla-capture scenario.epoch_at)."
+                    : string.Empty));
         }
 
         SupervisionPlan? plan = null;
@@ -362,7 +430,8 @@ public sealed class ScenarioLockCheck
                 + "scenario.accept_skipped_dry_run=true), which the run report then records.");
         }
 
-        return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null, plan,
+        return new ScenarioLockCheck(lockPath, locked, epochCompared: epoch is not null,
+                                     epochMovedTo is { } at && at != epoch!.CivilDateTime ? at : null, plan,
                                      skippedDryRunAccepted: dryRunSkipped);
     }
 
@@ -388,7 +457,11 @@ public sealed class ScenarioLockCheck
         agreeing.Add("catalogue");
         return $"{locked.ScenarioId}, compiled by {Shown(locked.Compiler)}; "
                + string.Join(", ", agreeing.SkipLast(1)) + $" and {agreeing[^1]} agree with it; "
-               + (EpochCompared ? "so does the epoch" : "the epoch not compared, as the session declares none");
+               + (!EpochCompared
+                   ? "the epoch not compared, as the session declares none"
+                   : EpochMovedTo is { } at
+                       ? $"so does the epoch, which the run moves to start at {SolarEpoch.FormatUtc(at)}"
+                       : "so does the epoch");
     }
 
     /// <summary>The supervision plan the run binds, in the report's words.</summary>

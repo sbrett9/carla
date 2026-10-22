@@ -89,7 +89,6 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 
 _THIS = os.path.dirname(os.path.abspath(__file__))
@@ -344,10 +343,8 @@ VOCABULARY = {"namespaces": [{
              "expected_tower": {"type": "string",
                                 "definition": "the tower the guard was due to relieve, as the id "
                                               "of its area of interest"},
-             "expected_shift_start": {"type": "string",
-                                      "definition": "the civil date and time, with its UTC offset, "
-                                                    "at which the shift it was due to take up "
-                                                    "began"}},
+             "expected_shift_start": {"type": "time",
+                                      "definition": "when the shift it was due to take up began"}},
          "counterfactual": {"kind": "term", "ref": "bahonar:tower_posting"}},
         # A tower posting is the matched negative for the dwell-shaped terms, and for the posting
         # not taken up above all: the same guard type, departing the same base at the same shift
@@ -588,11 +585,9 @@ class BahonarPatternOfLifeSpecification:
 
     @property
     def no_show_shift_start(self) -> str:
-        """The civil instant the skipped posting's shift begins, written as the epoch writes one:
-        day `d` is the epoch's civil date plus `d` days, since the calendar advances at midnight."""
-        midnight = datetime.fromisoformat(EPOCH["civil_datetime"]).replace(hour=0, minute=0,
-                                                                            second=0)
-        return (midnight + timedelta(days=self.no_show_day, hours=self.no_show_hour)).isoformat()
+        """The skipped posting's shift change, as a day and clock: when its guard departs, and the
+        shift its label names."""
+        return f"d{self.no_show_day} {self.no_show_clock}"
 
     def hauls(self) -> list[dict]:
         """Light air-freight runs from the apron to the port, a few a day."""
@@ -650,7 +645,7 @@ class BahonarPatternOfLifeSpecification:
         # the schedule writes no posting there, so the tower stands unmanned.
         if self.no_show_in_run:
             out.append(self._actor(self.off_post_id, "guard",
-                                   f"d{self.no_show_day} {self.no_show_clock}", "apron", "apron",
+                                   self.no_show_shift_start, "apron", "apron",
                                    via=[OFF_POST_PLACE],
                                    stops=[{"place": OFF_POST_PLACE, "duration": SHIFT_LENGTH,
                                            "parking": True}]))

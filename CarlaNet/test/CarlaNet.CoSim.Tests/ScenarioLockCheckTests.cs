@@ -407,6 +407,98 @@ public sealed class ScenarioLockCheckTests
     }
 
     [Fact]
+    public void TheCompiledEpochMovedToAnotherInstantIsAdmittedAndTheStatementNamesTheMove()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        SolarEpoch epoch = SolarLeaseTests.PortEpoch();
+        DateTimeOffset at = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+
+        ScenarioLockCheck check = ScenarioLockCheck.Require(compiled.Scenario, CompiledFixture.Catalogue, epoch, at,
+                                                            acceptSkippedDryRun: false);
+
+        _output.WriteLine(check.ToString());
+        Assert.True(check.EpochCompared);
+        Assert.Equal(at, check.EpochMovedTo);
+        Assert.EndsWith("catalogue agree with it; so does the epoch, which the run moves to start at "
+                        + "2026-10-22T17:40:00Z", check.ToString());
+
+        // Moved to its own instant, the epoch is kept, and the statement says nothing of a move.
+        ScenarioLockCheck kept = ScenarioLockCheck.Require(compiled.Scenario, CompiledFixture.Catalogue, epoch,
+                                                           epoch.UtcDateTime, acceptSkippedDryRun: false);
+        Assert.Null(kept.EpochMovedTo);
+        Assert.EndsWith("agree with it; so does the epoch", kept.ToString());
+    }
+
+    [Fact]
+    public void AMoveOnAScenarioWithNoLockIsRefusedNamingWhereTheLockWasLookedFor()
+    {
+        DateTimeOffset at = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => ScenarioLockCheck.Require(CoSimFixtures.RightAngleTurnScenario, CompiledFixture.Catalogue,
+                                            SolarLeaseTests.PortEpoch(), at, acceptSkippedDryRun: false));
+
+        _output.WriteLine(refused.Message);
+        Assert.Equal($"The run moves simulated second zero to 2026-10-22T17:40:00Z, and the scenario "
+                     + $"{CoSimFixtures.RightAngleTurnScenario} has no compile lock at "
+                     + $"{ScenarioLockCheck.LockPathFor(CoSimFixtures.RightAngleTurnScenario)}. A move keeps the "
+                     + "offset, zone, daylight saving and calendar of the epoch a scenario was compiled against, "
+                     + "and an uncompiled scenario was compiled against none. SUMO has not been started. Give the "
+                     + "session an epoch at the instant wanted, with no move.", refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+
+        // A move needs the epoch it moves.
+        Assert.Throws<ArgumentException>(
+            () => ScenarioLockCheck.Require(CoSimFixtures.RightAngleTurnScenario, CompiledFixture.Catalogue,
+                                            epoch: null, at, acceptSkippedDryRun: false));
+    }
+
+    [Fact]
+    public void AMoveOfAnEpochOtherThanTheCompiledOneIsRefusedNamingBothDigestsAndTheMove()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        SolarEpoch held = SolarLeaseTests.PortEpoch(calendarAdvances: false);
+        DateTimeOffset at = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => ScenarioLockCheck.Require(compiled.Scenario, CompiledFixture.Catalogue, held, at,
+                                            acceptSkippedDryRun: false));
+
+        _output.WriteLine(refused.Message);
+        Assert.Contains($"(1) the session's epoch ({held}) digests as {held.Digest} and the scenario was compiled "
+                        + $"against the epoch {SolarLeaseTests.PortEpoch().Digest}, so every civil instant its "
+                        + "resolution report states was resolved against another t = 0; the run moves simulated "
+                        + "second zero to 2026-10-22T17:40:00Z, which moves the compiled epoch and no other. ",
+                        refused.Message);
+        Assert.EndsWith("give the session the catalogue and epoch it was compiled against. To run the scenario's "
+                        + "traffic at another civil time, keep the compiled epoch and move simulated second zero "
+                        + "(EpochAt; carla-drive --epoch-at; carla-capture scenario.epoch_at).", refused.Message);
+    }
+
+    [Fact]
+    public void ACatalogueOtherThanTheCompiledOneIsRefusedWhateverTheMove()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        JsonObject document = compiled.LockDocument(SolarLeaseTests.PortEpoch());
+        document["catalogue"]!["catalogue_digest"] = new string('a', 64);
+        compiled.WriteLock(document);
+
+        CoSimSessionRefusedException refused = Assert.Throws<CoSimSessionRefusedException>(
+            () => ScenarioLockCheck.Require(compiled.Scenario, CompiledFixture.Catalogue, SolarLeaseTests.PortEpoch(),
+                                            SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+                                            acceptSkippedDryRun: false));
+
+        _output.WriteLine(refused.Message);
+        Assert.Contains($"(1) the catalogue the session loads ('{CompiledFixture.Catalogue.CatalogueId}') declares "
+                        + $"digest {CompiledFixture.Catalogue.CatalogueDigest} and the scenario was compiled "
+                        + $"against {new string('a', 64)}", refused.Message);
+        Assert.DoesNotContain("(2)", refused.Message);
+
+        // The epoch agrees, so the refusal says nothing of moving it.
+        Assert.DoesNotContain("move simulated second zero", refused.Message);
+    }
+
+    [Fact]
     public void ASessionThatDeclaresNoEpochIsNotComparedOnOneAndSaysSo()
     {
         using CompiledFixture compiled = CompiledFixture.Write(

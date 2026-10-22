@@ -139,7 +139,7 @@ To use the example on your own world, change `world`, the places and the times.
          "definition": "The van due to make a scheduled delivery leaves on time but parks somewhere else, so the shop gets no delivery.",
          "parameters": {
            "expected_area": {"type": "string", "definition": "the id of the area of interest where the van was due"},
-           "expected_time": {"type": "string", "definition": "the civil date and time, with its UTC offset, the van was due to leave"}},
+           "expected_time": {"type": "time", "definition": "when the van was due to leave"}},
          "counterfactual": {"kind": "term", "ref": "shop:scheduled_delivery"}}
       ],
       "roles": [{"role": "shop:delivery_van", "definition": "the van making a scheduled delivery"}],
@@ -154,7 +154,7 @@ To use the example on your own world, change `world`, the places and the times.
        "intervals": [{"participant": "van_due_d0_h9", "phase": "parked_elsewhere",
                       "anchor": {"start": "stop:0", "end": "stop_end:0"}}],
        "aoi_refs": ["shop_front"],
-       "parameters": {"expected_area": "shop_front", "expected_time": "2026-05-12T09:00:00-06:00"}}
+       "parameters": {"expected_area": "shop_front", "expected_time": {"instant": "missed_delivery"}}}
     ],
     "series": [
       {"series_id": "scheduled_deliveries", "rota": "deliveries", "member_role": "shop:delivery_van",
@@ -550,6 +550,7 @@ The example does it this way:
    Use a term that says what it does instead: `shop:delivery_not_made`.
 4. Give the place and time it was expected.\
    Put them in the instance's `parameters`: `expected_area` and `expected_time`.\
+   `expected_time` is declared `time` and names `missed_delivery`, the instant the van departs.\
    The empty place reaches the record as a value on the vehicle's label, never as a label of its own.
 5. Anchor its interval to its stop.\
    The interval runs from `stop:0` to `stop_end:0`.
@@ -560,8 +561,18 @@ The example does it this way:
 
 Parameters hold a subject's values, on an instance, a series or a cohort.\
 Declare each key in the `parameters` of one of the subject's label terms.\
-Give it a `type` (`number`, `integer`, `string` or `boolean`), a `definition` and a `unit` where it has one.\
+Give it a `type` (`number`, `integer`, `string`, `boolean` or `time`), a `definition` and a `unit` where it has one.\
 The compiler refuses a value of the wrong type and a key no label declares (check 56).
+
+Declare a parameter that names a time as `time`.\
+Write its value in any form from [The epoch](#the-epoch), such as `"d0 09:00"` or `{"instant": "missed_delivery"}`.\
+The compiler resolves it as it resolves an interval's begin.\
+It refuses a value that does not resolve (check 47).\
+The supervision plan carries the value as its seconds and its civil instant.\
+In the example, `expected_time` compiles to `{"seconds": 5400.0, "civil": "2026-05-12T09:00:00-06:00"}`.\
+The run manifest writes the civil instant again from the seconds, on the run's epoch.\
+So the value moves with a run that moves simulated second zero (`--epoch-at`).\
+A time given to a `string` parameter stays text.
 
 `hard_negative_for` on a term is copied onto every nominal subject that carries the term.\
 Do not restate it on a subject, or restate it exactly (check 57).
@@ -820,9 +831,11 @@ An axis's `kind` says what you mean it to vary.\
 The compiler refuses an axis declared `behaviour` that changes the light.\
 Across this sweep, the example's window opens with the sun at 34.2, 36.2 and 23.4 degrees.
 
-A parameter that holds a civil date is text.\
-An `epoch.date` sweep does not change it: in every member above, `expected_time` still reads `2026-05-12T09:00:00-06:00`.\
-A `vary` sweep also refuses an axis that changes it.
+A `time` parameter keeps its seconds and takes each member's date.\
+In every member above, `expected_time` is 5400 s.\
+Its `civil` reads 09:00 on that member's date, such as `2026-06-21T09:00:00-06:00`.\
+A `string` parameter that holds a civil date does not change.\
+A `vary` sweep also refuses an axis that changes a parameter.
 
 ### Keep the output path short on Windows
 
@@ -911,6 +924,13 @@ carla-drive --scenario Import/Arapahoe_I25_SupervisionCheck.sumocfg --world-pack
   `--end SECOND` stops it instead after the SUMO step that simulated second falls in.
 - `--warm-up SECONDS` runs SUMO ahead to that second before the first CARLA tick, so the view starts near the part you want to see.\
   The resolution report gives each time in seconds.
+- `--epoch-at INSTANT` moves simulated second zero for this run to a UTC date and time, such as `2026-10-22T17:40:00Z`.\
+  SUMO runs the same traffic.\
+  The sun and every civil time the drive records follow the new second zero.\
+  The run shows the instant at the epoch's own offset.\
+  Without `--epoch`, the drive moves the epoch in the scenario's compile lock and takes the lock's illumination.\
+  With `--epoch`, that file's epoch must be the lock's.\
+  See [Epoch](../Schemas/Epoch.md#moving-simulated-second-zero-for-one-run).
 
 Pausing the `sumo-gui` window pauses the drive.\
 Closing it stops the run.

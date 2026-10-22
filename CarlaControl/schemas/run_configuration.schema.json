@@ -992,7 +992,7 @@
         },
         "epoch": {
           "type": "object",
-          "description": "What simulated second zero means in civil time. A binding: a run that rendered another time would contradict its own scenario.",
+          "description": "What simulated second zero means in civil time, as the scenario was compiled against it. A binding, restated only with the lock's value: scenario.epoch_at moves its instant for one run and keeps the rest of it.",
           "x-mutability": "bound",
           "x-supplied-by": "scenario"
         },
@@ -1002,6 +1002,21 @@
           "description": "The epoch's digest.",
           "x-mutability": "bound",
           "x-supplied-by": "scenario"
+        },
+        "epoch_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The UTC date and time simulated second zero is moved to for this run, such as 2026-10-22T17:40:00Z, or null to keep the scenario's own. The Z may be left off; any other offset is refused (check 13). The traffic is the scenario's, unchanged. The run's epoch is scenario.epoch with its instant moved, shown at the scenario's own offset: 17:40Z on Bahonar, at +03:30, is 21:10 local. The civil span, the sun and every civil time the run records are on it.",
+          "default": null,
+          "x-mutability": "session_fixed",
+          "x-supplied-by": "tool"
         },
         "sumo_step_s": {
           "type": "number",

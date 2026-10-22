@@ -12,7 +12,7 @@
 
 `carla:illumination` is what the run declared the sun to be for this still's frame:
 
-- the scenario's epoch (the civil time that simulated second zero stands for)
+- the run's epoch (the civil time that simulated second zero stands for): the scenario's, or the scenario's moved where the run moved simulated second zero
 - the illumination policy
 - the frame's civil time and the sun declared for it
 - how far the world's sun was from that declaration
@@ -45,7 +45,7 @@ Fields that need an epoch, or an audit of the frame, are left out where there is
 | `audited` | boolean | | Yes | Whether the world's sun was compared with the declaration on this frame's tick. |
 | `rate` | number | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. |
 | `freeze_at_civil_time` | string | | No | The time of day the sun is held at, `hh:mm:ss`. Under `freeze_at` only. |
-| `epoch_digest` | string | | No | SHA-256 of the scenario's epoch, 64 lowercase hex digits. |
+| `epoch_digest` | string | | No | SHA-256 of the run's epoch, 64 lowercase hex digits. |
 | `epoch_civil` | string | | No | The civil time simulated second zero stands for, with its UTC offset. |
 | `utc_offset_hours` | number | hours | No | The epoch's declared UTC offset. |
 | `declared_civil` | string | | No | This frame's simulated instant as a civil time, with its UTC offset. |

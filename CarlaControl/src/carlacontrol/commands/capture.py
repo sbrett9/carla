@@ -15,7 +15,10 @@ knows -- its epoch, its windows, its SUMO step and seed, its illumination defaul
 lock; everything about this machine comes from the site profile; the run configuration and the
 options below say the rest. Every field of the effective configuration records the layer that set
 it: tool default, site profile, world package, scenario package, run configuration or operator
-override, the last of these taking precedence.
+override, the last of these taking precedence. The epoch is bound, and `--epoch-at`
+(`scenario.epoch_at`) moves its simulated second zero to a UTC date and time for one run: the
+scenario's traffic, unchanged, with the civil span, the sun and every civil time the run records on
+the moved epoch.
 
 Before anything is acquired the configuration is checked offline and the launch echo is
 printed: the civil span, the sun the session will bind and where, the captures and their cost, and

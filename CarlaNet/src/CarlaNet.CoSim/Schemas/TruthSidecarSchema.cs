@@ -255,7 +255,7 @@ public static class TruthSidecarSchema
                       + "sidecars carried one, which is version 1.", fixedValue: CotWriter.FormatVersion.ToString(CultureInfo.InvariantCulture)),
             Attribute("captured", "Instant", true,
                       "The still's instant, in UTC. From a SUMO drive, the simulated civil time of the still's frame, "
-                      + "from the scenario's epoch: the same instant as the world truth track's time_utc for the frame, "
+                      + "from the run's epoch: the same instant as the world truth track's time_utc for the frame, "
                       + "and the instant the still is named by, at the epoch's offset. From an SCTMV capture, which has "
                       + "no epoch, the recording computer's wall clock. Never the wall clock from a SUMO drive: that is "
                       + "the producer's written_utc."),
@@ -354,7 +354,7 @@ public static class TruthSidecarSchema
             Attribute("rate", "xs:decimal", false, "Sun-clock seconds per simulated second, under advance only.",
                       "seconds per second"),
             Attribute("freeze_at_civil_time", "ClockTime", false, "The time of day the sun is held at, under freeze_at only."),
-            Attribute("epoch_digest", "Sha256", false, "SHA-256 of the scenario's epoch."),
+            Attribute("epoch_digest", "Sha256", false, "SHA-256 of the run's epoch."),
             Attribute("epoch_civil", "CivilInstant", false, "The civil instant simulated second zero stands for."),
             Attribute("utc_offset_hours", "xs:decimal", false, "The epoch's declared UTC offset.", "hours"),
             Attribute("declared_civil", "CivilInstant", false, "This frame's simulated instant as a civil time."),

@@ -8,7 +8,8 @@ package's values are bindings: a run that restates one with a different value is
 (check 3), because a scenario that asserts one world and a run that renders another produce a corpus
 that contradicts itself. And the effective configuration read back as a run configuration must resolve
 to itself, so a run replays from its record, while a replay against a world that has since changed is
-refused rather than quietly re-bound.
+refused rather than quietly re-bound. The epoch stays bound under `scenario.epoch_at`, which moves
+simulated second zero as an operator field of its own, and a moved run replays to the same epoch.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 sys.path.insert(0, str(_REPO / "CarlaControl" / "test"))
 
 from RunCaptureFixture import (  # noqa: E402
+    EPOCH,
     MANIFEST,
     SCENARIO_ID,
     Layout,
@@ -140,6 +142,14 @@ def test_overriding_the_epoch_is_refused(layout):
     document = run_document(scenario={"epoch": {"epoch_version": 1}})
     [finding] = refused(layout, document).findings.refusals
     assert (finding.check_id, finding.subject) == (3, "scenario.epoch")
+    assert finding.message.endswith(
+        "recompile the scenario to change it. To run the scenario's traffic at another civil time, "
+        "keep scenario.epoch and move simulated second zero with scenario.epoch_at (--epoch-at)")
+
+
+def test_overriding_a_binding_other_than_the_epoch_does_not_mention_moving_it(layout):
+    [finding] = refused(layout, overrides=["world.origin_latitude=40.0"]).findings.refusals
+    assert "epoch_at" not in finding.message
 
 
 def test_restating_a_binding_with_its_own_value_is_accepted_and_noted(layout):
@@ -270,6 +280,53 @@ def test_a_replay_against_a_rebuilt_world_is_refused(layout):
 
 def test_the_digest_moves_when_a_science_field_moves(layout):
     assert resolve(layout).digest != resolve(layout, overrides=["occlusion.samples=48"]).digest
+
+
+# -- moving simulated second zero ------------------------------------------------------------------
+
+# The fixture's epoch is midnight on 21 March at -07:00; this is midnight on 21 June at that offset.
+MOVED_TO = "2026-06-21T07:00:00Z"
+
+
+def with_epoch_at(layout: Layout, document: dict | None = None, value: str = MOVED_TO):
+    """Resolve with `--epoch-at VALUE`, as carla-capture hands an alias to the resolver."""
+    site = SiteProfile.discover(layout.root, layout.write_profile(), environ={})
+    run = RunConfiguration.from_document(document if document is not None else run_document(),
+                                         "fixture.run.json")
+    override = (*RunConfiguration.parse_override(f"scenario.epoch_at={value}"), f"--epoch-at {value}")
+    return RunConfigurationResolver(site).resolve(run, [override])
+
+
+def test_epoch_at_is_an_operator_override_and_the_epoch_stays_the_compiled_one(layout):
+    effective = with_epoch_at(layout)
+    resolved = effective.resolution("scenario.epoch_at")
+    assert (resolved.value, resolved.layer, resolved.provenance, resolved.tool_default) == \
+        (MOVED_TO, "operator_override", f"--epoch-at {MOVED_TO}", None)
+    assert effective.resolution("scenario.epoch").layer == "scenario_package"
+    assert effective.epoch_object() == EPOCH
+    assert effective.run_epoch.civil_instant_at(0) == "2026-06-21T00:00:00-07:00"
+    assert effective.run_epoch.digest != effective.value("scenario.epoch_block_sha256")
+
+
+def test_without_epoch_at_the_run_is_on_the_compiled_epoch(layout):
+    effective = resolve(layout)
+    resolved = effective.resolution("scenario.epoch_at")
+    assert (resolved.value, resolved.layer) == (None, "tool_default")
+    assert effective.run_epoch.digest == effective.value("scenario.epoch_block_sha256")
+
+
+def test_a_moved_run_replays_to_the_same_epoch_and_configuration(layout):
+    first = with_epoch_at(layout)
+    document = first.to_run_configuration()
+    assert document["scenario"]["epoch_at"] == MOVED_TO
+    assert document["scenario"]["epoch"] == EPOCH
+    replayed = resolve(layout, document)
+    assert replayed.digest == first.digest
+    assert replayed.run_epoch.digest == first.run_epoch.digest
+
+
+def test_the_digest_moves_with_the_instant(layout):
+    assert with_epoch_at(layout).digest != resolve(layout).digest
 
 
 def test_the_digest_does_not_depend_on_the_machine(layout, tmp_path):

@@ -276,6 +276,23 @@ def test_an_epoch_the_session_would_refuse_is_refused_offline(layout):
     assert 13 in checks(findings)
 
 
+@pytest.mark.parametrize(("instant", "saying"), [
+    ("2026-06-21 07:00", "Simulated second zero is not moved: scenario.epoch_at '2026-06-21 07:00' "
+                         "is not a UTC date and time of the form 2026-10-22T17:40:00Z."),
+    ("2026-06-21T00:00:00-07:00", "Simulated second zero is not moved: scenario.epoch_at "
+                                  "'2026-06-21T00:00:00-07:00' carries the offset -07:00, and the "
+                                  "instant is given in UTC: write it 2026-06-21T07:00:00Z."),
+])
+def test_an_instant_to_move_second_zero_to_that_is_no_utc_date_and_time_is_refused(layout, instant,
+                                                                                  saying):
+    finding = only(launch(layout, overrides=[f"scenario.epoch_at={instant}"]), 13)
+    assert (finding.subject, finding.message) == ("scenario.epoch_at", saying)
+
+
+def test_a_utc_instant_to_move_second_zero_to_launches_clean(layout):
+    assert launch(layout, overrides=["scenario.epoch_at=2026-06-21T07:00:00Z"]).findings == []
+
+
 # -- channels -----------------------------------------------------------------------------------------
 
 def test_a_stare_with_nowhere_to_look_is_refused(layout):

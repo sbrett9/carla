@@ -37,6 +37,40 @@ public sealed class SumoDriveSessionStageTests : IDisposable
     }
 
     [Fact]
+    public void AnInstantToMoveSimulatedSecondZeroToWithNoEpochIsRefusedAtValidation()
+    {
+        using SyntheticWorld world = Fixture();
+        SumoDriveSessionOptions options = Counting(world);
+        options.Epoch = null;
+        options.EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+
+        CoSimSessionRefusedException refused = Refusal(options);
+
+        _output.WriteLine(refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+        Assert.StartsWith("The session was given 2026-10-22T17:40:00Z to move simulated second zero to, and no "
+                          + "epoch to move.", refused.Message);
+    }
+
+    [Fact]
+    public void AnInstantToMoveSimulatedSecondZeroToAtAnotherOffsetIsRefusedAtValidationAndTouchesNothing()
+    {
+        using SyntheticWorld world = Fixture();
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Driving(world, carla);
+        options.EpochAt = new DateTimeOffset(2026, 10, 22, 21, 10, 0, TimeSpan.FromHours(3.5));
+
+        CoSimSessionRefusedException refused = Refusal(options);
+
+        _output.WriteLine(refused.Message);
+        Assert.Equal(CoSimSessionStage.Validation, refused.Stage);
+        Assert.Contains("2026-10-22T21:10:00+03:30 carries the offset +03:30", refused.Message);
+        Assert.Contains("Give it as 2026-10-22T17:40:00Z.", refused.Message);
+        Assert.Empty(carla.SettingsWrites);
+        Assert.Empty(carla.SolarWrites);
+    }
+
+    [Fact]
     public void ARefusalOfAWorldPackageThatIsNotTheLoadedWorldIsAtValidation()
     {
         using SyntheticWorld world = Fixture();

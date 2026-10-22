@@ -457,7 +457,19 @@ class RunRecordSchemas:
                 "begin": _d(_STRING, "The window's begin in civil time, ISO 8601 with offset."),
                 "end": _d(_STRING, "Its end."),
                 "first_rendered": _d(_STRING, "The first rendered instant."),
-                "epoch": _d(_STRING, "The epoch in one line.")}, "The civil span."),
+                "epoch": _d(_STRING, "The run's epoch in one line: the scenario's, or that epoch "
+                                     "with simulated second zero moved by scenario.epoch_at."),
+                "epoch_block_sha256": _d(_P.SHA256, "SHA-256 of the run's epoch, in its canonical "
+                                                    "form, as the run manifest's "
+                                                    "solar.epoch_block_sha256 and each still's "
+                                                    "illumination chunk carry it."),
+                "scenario_epoch_block_sha256": _d(_P.SHA256, "SHA-256 of the epoch the scenario "
+                                                             "was compiled against, "
+                                                             "scenario.epoch_block_sha256."),
+                "epoch_at": _n(_STRING, "The UTC instant the run moved simulated second zero to; "
+                                        "null where it keeps the compiled epoch's.")},
+                "The civil span, on the run's epoch.",
+                required=["begin", "end", "first_rendered", "epoch"]),
             "sun": _d(sun, "The policy holding the sun, and the sun it binds."),
             "world": _object({
                 "map_name": _STRING, "package": _d(_STRING, "The world package's file name."),

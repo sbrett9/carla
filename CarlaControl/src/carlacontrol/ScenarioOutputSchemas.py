@@ -600,9 +600,15 @@ class ScenarioOutputSchemas:
     def _plan_defs(cls) -> dict:
         nullable_number = _n(_NUMBER)
         nullable_text = _n(_STRING)
+        time_parameter = _object({"seconds": _d(_NUMBER, "Simulated seconds from t = 0."),
+                                  "civil": _d(_STRING, "The civil instant the compiled epoch names "
+                                                       "it, ISO 8601 with the epoch's offset.")},
+                                 "A time parameter's value.")
         parameters = {"type": "object",
-                      "additionalProperties": {"type": ["number", "string", "boolean"]},
-                      "description": "Values for keys the labels' terms declare."}
+                      "additionalProperties": {"anyOf": [{"type": ["number", "string", "boolean"]},
+                                                         {"$ref": "#/$defs/time_parameter"}]},
+                      "description": "Values for keys the labels' terms declare; a time "
+                                     "parameter's is its second and civil instant."}
         anchor_event = _object({
             "event": {"type": "string", "pattern": _ANCHOR_EVENT},
             "lane": _d(_STRING, "The stop's lane."), "end_pos_m": _d(_NUMBER, "The stop's end "
@@ -657,4 +663,4 @@ class ScenarioOutputSchemas:
                           "refs": {"type": "array", "items": _STRING}},
                          "One authored vehicle's states and the rows naming it.")
         return {"instance": instance, "series": series, "report_series": report_series,
-                "cohort": cohort, "entity": entity}
+                "cohort": cohort, "entity": entity, "time_parameter": time_parameter}

@@ -123,7 +123,7 @@ Only `termination` is added at the very end.
 | `window.end_declared_s` | number | s | Where it was to end. |
 | `window.end_source` | string | | Where that end came from. |
 | `window.end_reached_s` | number or null | s | The simulated second the run reached. |
-| `window.civil` | array of 2 strings | | The begin and the end reached, in civil time (ISO 8601 with offset). |
+| `window.civil` | array of 2 strings | | The begin and the end reached, in civil time (ISO 8601 with offset), on the run's epoch: the scenario's, or that epoch with simulated second zero moved by `scenario.epoch_at`. |
 | `channels` | array | | Each channel's recorder counts, below. |
 | `cameras` | array of objects | | Where each camera looked. Each entry has `sensor_id`, `pattern` and the `exposure` the camera was given. A stare also has its `form`, `look_at` and `pose`. An orbit also has its `centre`, `radius_m`, `altitude_m` and `period_s`. |
 | `readiness` | object or null | | How each view became ready before the window: the rule, the ceilings, each channel's state and the time its tiles were in. |
@@ -239,4 +239,6 @@ This page describes version 1, the only version.\
 `RunResult.read` reads a result with no `result_version` as version 1.\
 It refuses a newer version and says to read it with the release that wrote it.\
 A file written before October 7, 2026 has no `producer`.\
-It is still version 1.
+It is still version 1.\
+In a file written before a run could move simulated second zero, the launch echo has no `civil.epoch_block_sha256`, `civil.scenario_epoch_block_sha256` or `civil.epoch_at`.\
+The schema does not require them.

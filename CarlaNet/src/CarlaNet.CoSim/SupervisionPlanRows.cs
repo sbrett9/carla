@@ -65,7 +65,10 @@ public sealed record PatternInstance
     /// <summary>The terms it asserts, which a nominal instance may carry too.</summary>
     public ImmutableArray<string> Labels { get; }
 
-    /// <summary>Its parameters, keys its labels' terms declare, with the values the author gave.</summary>
+    /// <summary>
+    /// Its parameters, keys its labels' terms declare, with the values the author gave; a time's as its
+    /// seconds and civil instant (<see cref="TermParameter.TimeType"/>).
+    /// </summary>
     public ImmutableSortedDictionary<string, JsonElement> Parameters { get; }
 
     /// <summary>
@@ -160,13 +163,19 @@ public sealed record PlannedInterval
     /// <summary>The declared start in simulated seconds; null where the start declares no instant.</summary>
     public double? DeclaredStartSeconds { get; }
 
-    /// <summary>The declared start as the epoch names it in civil time; null with <see cref="DeclaredStartSeconds"/>.</summary>
+    /// <summary>
+    /// The declared start in civil time, as the compiled epoch names it; null with
+    /// <see cref="DeclaredStartSeconds"/>. A run's manifest names it under the run's epoch instead.
+    /// </summary>
     public string? DeclaredStartCivil { get; }
 
     /// <summary>The declared end in simulated seconds; null where none is declared.</summary>
     public double? DeclaredEndSeconds { get; }
 
-    /// <summary>The declared end in civil time; null with <see cref="DeclaredEndSeconds"/>.</summary>
+    /// <summary>
+    /// The declared end in civil time, as the compiled epoch names it; null with
+    /// <see cref="DeclaredEndSeconds"/>. A run's manifest names it under the run's epoch instead.
+    /// </summary>
     public string? DeclaredEndCivil { get; }
 
     /// <summary>The declared length, where the declaration is one; null otherwise.</summary>
@@ -364,13 +373,15 @@ public sealed record SeriesSlot
     /// <summary>Its declared start, in simulated seconds.</summary>
     public double DeclaredStartSeconds { get; }
 
-    /// <summary>Its declared start in civil time.</summary>
+    /// <summary>Its declared start in civil time, as the compiled epoch names it.</summary>
     public string DeclaredStartCivil { get; }
 
     /// <summary>Its declared end, in simulated seconds; null where it has none.</summary>
     public double? DeclaredEndSeconds { get; }
 
-    /// <summary>Its declared end in civil time; null with <see cref="DeclaredEndSeconds"/>.</summary>
+    /// <summary>
+    /// Its declared end in civil time, as the compiled epoch names it; null with <see cref="DeclaredEndSeconds"/>.
+    /// </summary>
     public string? DeclaredEndCivil { get; }
 
     /// <summary>The entity that realises it: the rota entry's vehicle, its SUMO id.</summary>

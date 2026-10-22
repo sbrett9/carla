@@ -13,7 +13,9 @@ a scenario comes to compile and then be refused at run start -- or, worse, to be
 two different meanings. What is added here is only what the authoring side needs beyond the session:
 the refusal's problems attributed to checks 33 and 34, so a report can cite them, and the inverse of
 `CivilInstantAt` -- the simulated second a civil instant is -- which the time resolver checks against
-`CivilInstantAt` itself.
+`CivilInstantAt` itself. `moved_to` moves simulated second zero for one run with `SolarEpoch`'s own
+move, so the run's epoch a tool computes before the session starts has the digest the session gives
+it.
 
 **The offset is normative; the zone name is not.** `time_zone_id` is carried for a reader and never
 resolved: `zoneinfo` resolves zero zones on this machine, and two hosts with different databases would
@@ -213,9 +215,33 @@ class ScenarioEpoch:
         note = self.solar_epoch.Note
         return None if note is None else str(note)
 
+    @property
+    def utc_datetime(self) -> str:
+        """Simulated second zero in UTC, with the `Z` designator, as `SolarEpoch.FormatUtc` writes it."""
+        return str(SolarEpoch.FormatUtc(self.solar_epoch.UtcDateTime))
+
     def describe(self) -> str:
         """One line a person can read without arithmetic: SolarEpoch's own statement of itself."""
         return str(self.solar_epoch.ToString())
+
+    def moved_to(self, instant: str, what: str) -> ScenarioEpoch:
+        """This epoch with simulated second zero moved to `instant` for one run: the text read by
+        `SolarEpoch.ReadInstant` and the epoch moved by `SolarEpoch.MovedTo`.
+
+        `instant` is a UTC date and time, `2026-10-22T17:40:00Z`; the `Z` may be left off, and a zero
+        offset is read as the `Z` it equals. The moved epoch names the instant at this epoch's offset,
+        keeps its offset, daylight saving, zone and calendar, and has a note naming the move. This
+        epoch's own instant moves nothing: the epoch returned has this one's digest. `what` names the
+        instant in a refusal, such as `--epoch-at`.
+
+        Raises:
+            ValueError: the text is not a UTC date and time, or carries another offset, in
+                `SolarEpoch`'s words.
+        """
+        try:
+            return ScenarioEpoch(self.solar_epoch.MovedTo(SolarEpoch.ReadInstant(str(instant), what)))
+        except CoSimSessionRefusedException as refusal:
+            raise ValueError(str(refusal.Message)) from None
 
     # -- simulated seconds and civil instants ------------------------------------------------------
 

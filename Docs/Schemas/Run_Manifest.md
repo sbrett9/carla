@@ -106,7 +106,7 @@ A field marked "No" under Required can be absent altogether.
 | `config_sha256`, `routes_sha256`, `network_sha256` | string or null | | Yes | The SUMO configuration's, routes file's and network's SHA-256, as the lock records them. Null with no lock. |
 | `additional_sha256` | string or null | | Yes | The additional file's SHA-256. Null where there is none. |
 | `catalogue_digest` | string | | Yes | The vehicle catalog's digest. |
-| `epoch_digest` | string or null | | Yes | The scenario epoch's digest. Null with no lock. |
+| `epoch_digest` | string or null | | Yes | The digest of the epoch the scenario was compiled against, as the lock records it. Null with no lock. |
 | `world_opendrive_sha256` | string or null | | Yes | The world's OpenDRIVE SHA-256 the lock records. Null where it records none. |
 | `world_network_fingerprint` | string or null | | Yes | The world network's fingerprint the lock records. Null where it records none. |
 | `dry_run_ran` | boolean or null | | Yes | Whether the compiler ran the scenario in SUMO alone before writing it. Null where the lock records no such run, or there is no lock. |
@@ -193,13 +193,19 @@ A field marked "No" under Required can be absent altogether.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `epoch` | object or null | | Yes | The scenario's epoch as declared: the civil time simulated second zero stands for, with its zone. Null where none was declared. |
+| `epoch` | object or null | | Yes | The run's epoch: the civil time simulated second zero stands for, with its zone. It is the scenario's epoch as declared, or that epoch moved where the run moved simulated second zero. Null where none was declared. |
 | `epoch_declared` | boolean | | Yes | Whether an epoch was declared. |
-| `epoch_block_sha256` | string or null | | Yes | The epoch's digest. Null where none was declared. |
+| `epoch_block_sha256` | string or null | | Yes | The run's epoch's digest, which each still's `epoch_digest` names. Null where none was declared. |
+| `epoch_moved_from` | object or null | | No | The epoch the scenario was compiled against, where the run moved simulated second zero from it. Its digest is `scenario.epoch_digest`. Null where the run moved nothing. Absent from a manifest written before manifests carried it. |
 | `illumination_declared` | object or null | | Yes | The illumination policy the run declared (below). Null for none. A run that renders a world and declares none runs under the default policy. Its manifest has null here and the default in `illumination_in_force`. |
 | `illumination_in_force` | object or null | | Yes | The illumination policy in force (below): the declared one, or the default, `advance` at a rate of 1.0. Null where the run renders no world and declares none. |
 | `epoch_honoured` | boolean | | Yes | Whether each frame is lit by the sun of its own declared civil time. |
 | `advance_mechanism` | string, always `per_tick_write` | | Yes | How an advancing sun is moved: the session sets it on every tick. |
+
+**A run that moves simulated second zero.**\
+Such a run keeps the scenario's traffic and moves its clock.\
+`epoch` is the moved epoch and `epoch_moved_from` the compiled one, which the compile lock was checked against.\
+Every civil time the manifest writes is on the run's clock: `civil_begin`, `civil_end`, each interval's `declared_start_civil` and `declared_end_civil`, and each time parameter's `civil`.
 
 An illumination policy object:
 
@@ -221,7 +227,7 @@ One pattern instance of the supervision plan, as declared.
 | `instance_id` | string | | Yes | The instance: `<scenario_id>/<name>`. Sidecars name it in `<annotation instance>`. |
 | `supervision` | string | | Yes | What the author asserts: `annotated`, `nominal` (an authored negative) or `unlabelled` (no assertion). |
 | `labels` | array of strings | | Yes | Its labels, each `namespace:name`. |
-| `parameters` | object | | Yes | Its parameters, as the author declared them. |
+| `parameters` | object | | Yes | Its parameters, as the author declared them, with a time on the run's clock (below). |
 | `hard_negative_for` | array of strings or null | | Yes | The patterns it is a matched negative for. Null for none. |
 | `aoi_refs` | array of strings | | Yes | The areas of interest it names. |
 | `participants` | array | | Yes | Its participants, each `{"participant", "sumo_id", "role"}`, all strings. |
@@ -236,10 +242,18 @@ An interval as declared:
 | `anchor_start` | string or null | | Yes | The vehicle event its start is anchored to: `depart`, or `stop`, `stop_end` or `phase` with an index counted from 0, such as `stop:0`. Null where it is declared by time. |
 | `anchor_end` | string or null | | Yes | The event its end is anchored to. Null where none is. |
 | `declared_start_s` | number or null | seconds | Yes | Its declared start. |
-| `declared_start_civil` | string or null | | Yes | Its declared start as a civil time. |
+| `declared_start_civil` | string or null | | Yes | Its declared start as a civil time under the run's epoch. Null where it declares no start or the run declares no epoch. |
 | `declared_end_s` | number or null | seconds | Yes | Its declared end. |
-| `declared_end_civil` | string or null | | Yes | Its declared end as a civil time. |
+| `declared_end_civil` | string or null | | Yes | Its declared end as a civil time under the run's epoch. Null where it declares no end or the run declares no epoch. |
 | `declared_duration_s` | number or null | seconds | Yes | Its declared duration. |
+
+**A time parameter.**\
+A parameter that the row's labels declare of type `time` names an instant.\
+The supervision plan carries it as `{"seconds", "civil"}`, with `civil` on the compiled epoch's clock.\
+The manifest writes the same `seconds` and names `civil` again under the run's epoch, as it does an interval's declared instants.\
+`civil` is null where the run declares no epoch.\
+Every other parameter is written as the plan carries it.\
+This holds for the `parameters` of a series and a cohort too.
 
 ### `series`
 
@@ -253,7 +267,7 @@ One recurring series of the supervision plan, as declared, with its slots.
 | `member_role` | string | | Yes | The role each slot's vehicle plays. |
 | `supervision` | string | | Yes | `annotated`, `nominal` or `unlabelled`. |
 | `labels` | array of strings | | Yes | Its labels. |
-| `parameters` | object | | Yes | Its parameters, as declared. |
+| `parameters` | object | | Yes | Its parameters, as declared, with a time on the run's clock. |
 | `hard_negative_for` | array of strings or null | | Yes | The patterns it is a matched negative for. Null for none. |
 | `slots` | array | | Yes | Its slots, each `{"slot_key": string, "aoi_ref": string, "declared_start_s": number, "declared_end_s": number or null, "entity_id": string}`. |
 
@@ -266,7 +280,7 @@ Every vehicle a SUMO flow emits, as declared.
 | `flow_id` | string | | Yes | The SUMO flow. |
 | `supervision` | string | | Yes | `annotated`, `nominal` or `unlabelled`. |
 | `labels` | array of strings | | Yes | The labels its vehicles carry. |
-| `parameters` | object | | Yes | Its parameters, as declared. |
+| `parameters` | object | | Yes | Its parameters, as declared, with a time on the run's clock. |
 
 ### `sensor_placed`
 
@@ -482,4 +496,6 @@ It notes a manifest with no closing row as an interrupted run.\
 This page describes `manifest_version` 1, on the `manifest_opened` row.\
 Every manifest carries it.\
 Manifests written before the producer record was added have no `producer` and are valid against this schema.\
+Manifests written before a run could move simulated second zero have no `solar.epoch_moved_from` and are valid against this schema.\
+In those manifests an interval's `declared_start_civil` and `declared_end_civil` are the supervision plan's own copies, on the compiled epoch's clock, written whether or not the run declared an epoch.\
 Readers read a version they know and refuse a newer one by name rather than reading it in part.

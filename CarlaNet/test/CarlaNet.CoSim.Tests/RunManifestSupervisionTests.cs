@@ -138,6 +138,173 @@ public sealed class RunManifestSupervisionTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void AnIntervalSDeclaredInstantsAreWrittenOnTheRunSClockAndNullWithNoEpoch()
+    {
+        // The fixture plan's own civil copies are a placeholder, 2026-09-29T07:00:00+03:30, which no row
+        // below names: each is the interval's seconds under the run's epoch.
+        using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        foreach ((string name, SolarEpoch? epoch, DateTimeOffset? at, string? start, string? end) in
+                 new (string, SolarEpoch?, DateTimeOffset?, string?, string?)[]
+                 {
+                     ("moved", SolarLeaseTests.PortEpoch(), SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+                      "2026-10-22T21:10:01+03:30", "2026-10-22T21:10:03+03:30"),
+                     ("compiled", SolarLeaseTests.PortEpoch(), null, "2026-03-21T00:00:01+03:30", "2026-03-21T00:00:03+03:30"),
+                     ("none", null, null, null, null),
+                 })
+        {
+            string manifest = Path.Combine(_directory, name + ".jsonl");
+            SumoDriveSessionOptions options = Options(compiled, world, manifest, 1.0);
+            options.Epoch = epoch;
+            options.EpochAt = at;
+            using (SumoDriveSession session = SumoDriveSession.Start(options))
+            {
+                session.Advance();
+            }
+
+            List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+            JsonElement approach = Assert.Single(InstanceRow(rows, "Supervised/approach").GetProperty("intervals").EnumerateArray());
+            Assert.Equal((start, end), (approach.GetProperty("declared_start_civil").GetString(),
+                                        approach.GetProperty("declared_end_civil").GetString()));
+
+            // An interval that declares no instant has none to name, whatever the epoch.
+            JsonElement standoff = Assert.Single(InstanceRow(rows, "Supervised/standoff").GetProperty("intervals").EnumerateArray());
+            Assert.Equal((JsonValueKind.Null, JsonValueKind.Null),
+                         (standoff.GetProperty("declared_start_civil").ValueKind, standoff.GetProperty("declared_end_civil").ValueKind));
+        }
+    }
+
+    [RequiresSumoFact]
+    public void ATimeParameterIsWrittenOnTheRunSClockAndEveryOtherParameterAsThePlanCarriesIt()
+    {
+        // The supervised fixture with a time on an instance, the series and the cohort, and an instance's
+        // text that only looks like one. Under the compiled epoch each civil instant is the plan's own.
+        SolarEpoch epoch = SolarLeaseTests.PortEpoch();
+        using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();
+        JsonObject plan = JsonNode.Parse(File.ReadAllText(compiled.Plan))!.AsObject();
+        JsonObject approach = plan["instances"]!.AsArray().Single(row => row!["instance_id"]!.GetValue<string>()
+                                                                        == "Supervised/approach")!.AsObject();
+        approach["parameters"] = new JsonObject
+        {
+            ["expected_at"] = Time(345_600, epoch),
+            ["note"] = "2026-03-25T00:00:00+03:30",
+        };
+        plan["series"]![0]!["parameters"] = new JsonObject { ["relief_at"] = Time(7_200, epoch) };
+        plan["cohorts"]![0]!["parameters"] = new JsonObject { ["formed_at"] = Time(30, epoch) };
+        compiled.WritePlan(WithNamespace(plan, "test",
+            Term("test:approach", ("expected_at", TermParameter.TimeType), ("note", "string")),
+            Term("test:posting", ("relief_at", TermParameter.TimeType)),
+            Term("test:convoy", ("formed_at", TermParameter.TimeType))));
+        compiled.WriteLock(epoch);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+
+        foreach ((string name, SolarEpoch? declared, DateTimeOffset? at, string? expected, string? relief, string? formed) in
+                 new (string, SolarEpoch?, DateTimeOffset?, string?, string?, string?)[]
+                 {
+                     ("moved", epoch, SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+                      "2026-10-26T21:10:00+03:30", "2026-10-22T23:10:00+03:30", "2026-10-22T21:10:30+03:30"),
+                     ("compiled", epoch, null, Planned(approach, "expected_at"), Planned(plan["series"]![0]!, "relief_at"),
+                      Planned(plan["cohorts"]![0]!, "formed_at")),
+                     ("none", null, null, null, null, null),
+                 })
+        {
+            string manifest = Path.Combine(_directory, name + ".jsonl");
+            SumoDriveSessionOptions options = Options(compiled, world, manifest, 1.0);
+            options.Epoch = declared;
+            options.EpochAt = at;
+            using (SumoDriveSession session = SumoDriveSession.Start(options))
+            {
+                session.Advance();
+            }
+
+            List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+            JsonElement parameters = InstanceRow(rows, "Supervised/approach").GetProperty("parameters");
+            _output.WriteLine($"{name}: {parameters.GetRawText()}");
+            Assert.Equal((345_600.0, expected), (parameters.GetProperty("expected_at").GetProperty("seconds").GetDouble(),
+                                                 parameters.GetProperty("expected_at").GetProperty("civil").GetString()));
+            Assert.Equal("2026-03-25T00:00:00+03:30", parameters.GetProperty("note").GetString());
+            Assert.Equal(relief, rows.Single(row => Kind(row) == "series").GetProperty("parameters")
+                                     .GetProperty("relief_at").GetProperty("civil").GetString());
+            Assert.Equal(formed, rows.Single(row => Kind(row) == "cohort").GetProperty("parameters")
+                                     .GetProperty("formed_at").GetProperty("civil").GetString());
+        }
+
+        static string Planned(JsonNode row, string key) => row["parameters"]![key]!["civil"]!.GetValue<string>();
+    }
+
+    [RequiresSumoFact]
+    public void TheShippedBahonarPlanMovedToStartAt1740ZIsWrittenOnTheMovedClock()
+    {
+        string scenario = ScenarioLockCheckTests.RepositoryFile("Import", "Shahid_Bahonar_Port_PatternOfLife.sumocfg");
+        JsonNode locked = JsonNode.Parse(File.ReadAllText(ScenarioLockCheck.LockPathFor(scenario)))!;
+        string manifest = Path.Combine(_directory, "bahonar.jsonl");
+        var options = new SumoDriveSessionOptions(
+            scenario,
+            ScenarioLockCheckTests.RepositoryFile("CarlaControl", "Examples", "Scenarios", "Bahonar", "Shahid_Bahonar_Port.cwp"),
+            CoSimFixtures.VehicleCatalogue, "test://" + Guid.NewGuid().ToString("n"))
+        {
+            TickWorld = () => true,
+            Epoch = SolarEpoch.FromJson(locked["epoch"]!.ToJsonString()),
+            EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+            RunManifestPath = manifest,
+        };
+        using (SumoDriveSession.Start(options))
+        {
+        }
+
+        List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+        Assert.Equal("2026-10-22T21:10:00+03:30",
+                     rows[0].GetProperty("solar").GetProperty("epoch").GetProperty("civil_datetime").GetString());
+        JsonElement shift = InstanceRow(rows, "Shahid_Bahonar_Port_PatternOfLife/pi_posting_not_taken_up_d4")
+            .GetProperty("parameters").GetProperty("expected_shift_start");
+        Assert.Equal((345_600.0, "2026-10-26T21:10:00+03:30"),
+                     (shift.GetProperty("seconds").GetDouble(), shift.GetProperty("civil").GetString()));
+
+        // The escort transits' declared starts, the perimeter shadow's and the ferry stay-behind's end.
+        Assert.Equal(["2026-10-26T00:10:00+03:30", "2026-10-26T00:10:04+03:30", "2026-10-26T00:10:08+03:30",
+                      "2026-10-26T00:10:12+03:30", "2026-10-26T00:10:16+03:30"],
+                     Intervals("pi_escort_drydock_d3").Select(interval => interval.GetProperty("declared_start_civil").GetString()));
+        Assert.Equal("2026-10-28T16:40:00+03:30",
+                     Assert.Single(Intervals("pi_perimeter_shadow_d6")).GetProperty("declared_start_civil").GetString());
+        Assert.Equal("2026-10-29T21:10:00+03:30",
+                     Assert.Single(Intervals("pi_ferry_stay_behind_d1")).GetProperty("declared_end_civil").GetString());
+
+        JsonElement[] Intervals(string name) =>
+            [.. InstanceRow(rows, $"Shahid_Bahonar_Port_PatternOfLife/{name}").GetProperty("intervals").EnumerateArray()];
+    }
+
+    [Fact]
+    public void EveryCivilCopyOfTheShippedBahonarPlanIsItsSecondsUnderTheEpochItsLockRecords()
+    {
+        // What makes the manifest's re-derivation the plan's own words for a run that keeps the compiled
+        // epoch: the compiler derived every copy from its seconds with the same function.
+        SupervisionPlan plan = SupervisionPlan.Read(SupervisionPlanTests.ShippedPlan("Shahid_Bahonar_Port_PatternOfLife"));
+        JsonNode locked = JsonNode.Parse(File.ReadAllText(
+            ScenarioLockCheckTests.RepositoryFile("Import", "Shahid_Bahonar_Port_PatternOfLife.lock.json")))!;
+        SolarEpoch epoch = SolarEpoch.FromJson(locked["epoch"]!.ToJsonString());
+        Assert.Equal(locked["epoch_block_sha256"]!.GetValue<string>(), epoch.Digest);
+
+        int copies = 0;
+        foreach (PlannedInterval interval in plan.Instances.SelectMany(instance => instance.Intervals))
+        {
+            Assert.Equal(Civil(epoch, interval.DeclaredStartSeconds), interval.DeclaredStartCivil);
+            Assert.Equal(Civil(epoch, interval.DeclaredEndSeconds), interval.DeclaredEndCivil);
+            copies += (interval.DeclaredStartCivil is null ? 0 : 1) + (interval.DeclaredEndCivil is null ? 0 : 1);
+        }
+
+        // Six declared starts, the escort transits' and the perimeter shadow's, and the ferry stay-behind's end.
+        Assert.Equal(7, copies);
+        foreach (SeriesSlot slot in plan.Series.SelectMany(series => series.Slots))
+        {
+            Assert.Equal(Civil(epoch, slot.DeclaredStartSeconds), slot.DeclaredStartCivil);
+            Assert.Equal(Civil(epoch, slot.DeclaredEndSeconds), slot.DeclaredEndCivil);
+        }
+
+        static string? Civil(SolarEpoch epoch, double? seconds) =>
+            seconds is { } at ? SolarEpoch.FormatCivil(epoch.CivilInstantAt(at)) : null;
+    }
+
+    [RequiresSumoFact]
     public void AManifestCutOffAnywhereNamesAsOpenTheIntervalsTheBinderHeldOpenThen()
     {
         using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();

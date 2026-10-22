@@ -42,6 +42,7 @@ from carlacontrol.RouteValidator import RouteRequest, RouteValidator  # noqa: E4
 from carlacontrol.ResolutionReport import ResolutionReport  # noqa: E402
 from carlacontrol.ScenarioCompiler import SKIPPED_DRY_RUN, ScenarioCompiler  # noqa: E402
 from carlacontrol.ScenarioEpoch import ScenarioEpoch  # noqa: E402
+from carlacontrol.ScenarioOutputSchemas import ScenarioOutputSchemas  # noqa: E402
 from carlacontrol.ScenarioSchema import OWN_CHECKS, SCHEMA, ScenarioSchema  # noqa: E402
 from carlacontrol.SumoDryRun import SumoDryRun  # noqa: E402
 from carlacontrol.VehicleCatalogue import VehicleCatalogue  # noqa: E402
@@ -1177,6 +1178,36 @@ def test_series_and_cohort_rows_carry_the_parameters_their_labels_declare(world,
     assert not result.refused, [str(f) for f in result.findings.refusals]
     assert result.plan["series"][0]["parameters"] == {"halt_s": 600}
     assert result.plan["cohorts"][0]["parameters"] == {"vehs_per_hour": 200}
+
+
+def test_a_time_parameter_reaches_the_plan_and_the_report_as_its_second_and_civil_instant(
+        world, installation, tmp_path):
+    """A named instant on an instance, a day and clock on a series and an absolute instant on a
+    cohort each compile to `{"seconds", "civil"}` under the fixture's 06:00 epoch, in the plan as
+    written to disk and in the report, and the plan conforms to its schema."""
+    time = {"type": "time", "definition": "when it was due"}
+    vocabulary = vocabulary_with(world, {
+        "fixture:standoff": {"parameters": {"expected_at": time}},
+        "fixture:routine_patrol": {"parameters": {"due_at": time}},
+        "fixture:through_traffic": {**COHORT_TERM, "parameters": {"first_seen": time}}})
+    block = supervision_with(world, cohorts=[{
+        "flow": "ambient", "supervision": "annotated", "labels": ["fixture:through_traffic"],
+        "parameters": {"first_seen": "2026-03-21T06:30:00-06:00"}}])
+    block["instances"][0]["parameters"] = {"expected_at": {"instant": "probe_time"}}
+    block["series"][0]["parameters"] = {"due_at": "d0 08:15"}
+    result = compile_spec(world, installation, tmp_path, supervision=block, vocabulary=vocabulary)
+    assert not result.refused, [str(f) for f in result.findings.refusals]
+    plan = json.loads(result.files["supervision"].read_text(encoding="utf-8"))
+    assert plan_rows(plan)["probe_standoff"]["parameters"] == {
+        "expected_at": {"seconds": 3600.0, "civil": "2026-03-21T07:00:00-06:00"}}
+    assert plan["series"][0]["parameters"] == {
+        "due_at": {"seconds": 8100.0, "civil": "2026-03-21T08:15:00-06:00"}}
+    assert plan["cohorts"][0]["parameters"] == {
+        "first_seen": {"seconds": 1800.0, "civil": "2026-03-21T06:30:00-06:00"}}
+    assert ScenarioSchema.validate_against(plan, ScenarioOutputSchemas.supervision_plan()) == []
+    assert result.report["supervision"]["cohorts"] == plan["cohorts"]
+    assert 'parameters expected_at = {"seconds": 3600.0, "civil": "2026-03-21T07:00:00-06:00"}' in \
+        result.files["resolution_md"].read_text(encoding="utf-8")
 
 
 def test_a_series_or_cohort_parameter_no_label_declares_is_refused_under_check_56(

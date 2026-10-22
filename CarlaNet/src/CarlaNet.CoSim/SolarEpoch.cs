@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace CarlaNet.CoSim;
@@ -54,9 +55,10 @@ public sealed class SolarEpoch
         "calendar_advances", "dst_in_effect", "time_zone_id", "note",
     ];
 
-    // A calendar date and a clock with an explicit zone designator: "Z" or a signed hh:mm offset.
-    // Fractional seconds are allowed; a bare local time is not, because a civil time with no offset
-    // is the error the epoch exists to eliminate.
+    // A calendar date and a clock with a zone designator: "Z" or a signed hh:mm offset. Fractional
+    // seconds are allowed. An epoch's own fields refuse a time without a designator, because a civil
+    // time with no offset is the error the epoch exists to eliminate; the instant a run moves simulated
+    // second zero to is read in UTC and may leave it off.
     private static readonly Regex IsoInstant = new(
         @"^(?<y>\d{4})-(?<mo>\d{2})-(?<d>\d{2})T(?<h>\d{2}):(?<mi>\d{2}):(?<s>\d{2})(?<f>\.\d{1,7})?"
         + @"(?<z>Z|[+-]\d{2}:\d{2})?$",
@@ -196,6 +198,94 @@ public sealed class SolarEpoch
         }
 
         return FromJson(text.Append('}').ToString());
+    }
+
+    /// <summary>
+    /// Read the instant a run moves simulated second zero to (<see cref="MovedTo"/>): a UTC date and
+    /// time, <c>2026-10-22T17:40:00Z</c>, with up to seven digits of fraction and the <c>Z</c> optional.
+    /// </summary>
+    /// <remarks>
+    /// A zero offset written <c>+00:00</c> is read as the <c>Z</c> it equals. Any other offset is
+    /// refused, and the refusal names the same instant in UTC. The moved epoch shows the instant at the
+    /// scenario's own offset.
+    /// </remarks>
+    /// <param name="text">The date and time.</param>
+    /// <param name="what">What the text was given as, such as an option's name, for the refusal to name.</param>
+    /// <returns>The instant, at offset zero.</returns>
+    /// <exception cref="CoSimSessionRefusedException">
+    /// The text is not a date and time of that form, names a date or a clock the calendar does not have,
+    /// or carries an offset other than zero.
+    /// </exception>
+    public static DateTimeOffset ReadInstant(string text, string what)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentException.ThrowIfNullOrWhiteSpace(what);
+        List<string> problems = [];
+        DateTimeOffset? instant = ParseInstant(text, what, "a UTC date and time of the form 2026-10-22T17:40:00Z",
+                                               zoneRequired: false, problems, out _);
+        if (instant is { } read && read.Offset != TimeSpan.Zero)
+        {
+            problems.Add($"{what} '{text}' carries the offset {FormatOffset(read.Offset)}, and the instant is "
+                         + $"given in UTC: write it {FormatUtc(read)}");
+        }
+
+        if (problems.Count > 0)
+        {
+            throw new CoSimSessionRefusedException($"Simulated second zero is not moved: {problems[0]}.");
+        }
+
+        return instant!.Value;
+    }
+
+    /// <summary>
+    /// This epoch with simulated second zero moved to another instant: the scenario's traffic, for one
+    /// run, at another civil time.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Only the instant moves.</b> <c>civil_datetime</c> and <c>utc_datetime</c> name the new
+    /// instant, at this epoch's offset; the offset, the daylight-saving flag, the zone, the calendar
+    /// setting and the version are kept as written. Moving an epoch at +03:30 to 17:40Z gives
+    /// 21:10+03:30.</para>
+    ///
+    /// <para><b>The note is replaced.</b> The scenario's note describes its own clock and would
+    /// contradict the moved one, so the moved epoch's note names the instant it was moved to, the one it
+    /// was moved from and the digest of the epoch moved.</para>
+    ///
+    /// <para>The canonical object is edited rather than declared again from its parts: <see cref="Declare"/>
+    /// writes an offset of -6 as -6.0, which would move the digest of an epoch whose offset was written as
+    /// an integer. The edited object is read by <see cref="FromJson"/>, under every rule an epoch read
+    /// from a file is.</para>
+    /// </remarks>
+    /// <param name="instant">The instant simulated second zero is to be, in UTC (<see cref="ReadInstant"/>).</param>
+    /// <returns>
+    /// This epoch, unchanged, where the instant is its own; otherwise the moved epoch, with a digest of
+    /// its own.
+    /// </returns>
+    /// <exception cref="CoSimSessionRefusedException">
+    /// The instant carries an offset other than zero, or the moved epoch breaks a rule.
+    /// </exception>
+    public SolarEpoch MovedTo(DateTimeOffset instant)
+    {
+        if (instant.Offset != TimeSpan.Zero)
+        {
+            throw new CoSimSessionRefusedException(
+                $"Simulated second zero is not moved: {FormatCivil(instant)} carries the offset "
+                + $"{FormatOffset(instant.Offset)}, and the instant is given in UTC, which the run shows at "
+                + $"the epoch's own offset, UTC{FormatOffset(UtcOffset)}. Give it as {FormatUtc(instant)}.");
+        }
+
+        if (instant == CivilDateTime)
+        {
+            return this;
+        }
+
+        string civil = FormatCivil(instant.ToOffset(UtcOffset));
+        JsonObject moved = JsonNode.Parse(CanonicalJson)!.AsObject();
+        moved["civil_datetime"] = civil;
+        moved["utc_datetime"] = FormatUtc(instant);
+        moved["note"] = $"Simulated second zero moved at run time to {civil} from {CivilDateTimeText}, "
+                        + $"the epoch {Digest}.";
+        return FromJson(moved.ToJsonString());
     }
 
     /// <summary>
@@ -380,16 +470,36 @@ public sealed class SolarEpoch
             return null;
         }
 
-        string text = value.GetString()!;
+        DateTimeOffset? instant = ParseInstant(value.GetString()!, field,
+                                               "an ISO-8601 date and time of the form 2026-03-21T00:00:00+03:30",
+                                               zoneRequired: true, problems, out string? zone);
+        usedUtcDesignator = zone == "Z";
+        return instant;
+    }
+
+    /// <summary>
+    /// The instant a text names under the epoch's grammar, or null with the problem added to
+    /// <paramref name="problems"/>. A text with no zone designator is read in UTC unless one is required.
+    /// </summary>
+    /// <param name="form">The grammar, as a refusal describes it.</param>
+    /// <param name="zone">The designator as written, <c>Z</c> or a signed offset; null where there is none.</param>
+    private static DateTimeOffset? ParseInstant(string text,
+                                                string field,
+                                                string form,
+                                                bool zoneRequired,
+                                                List<string> problems,
+                                                out string? zone)
+    {
+        zone = null;
         Match match = IsoInstant.Match(text);
         if (!match.Success)
         {
-            problems.Add($"{field} '{text}' is not an ISO-8601 date and time of the form "
-                         + "2026-03-21T00:00:00+03:30");
+            problems.Add($"{field} '{text}' is not {form}");
             return null;
         }
 
-        if (!match.Groups["z"].Success)
+        zone = match.Groups["z"].Success ? match.Groups["z"].Value : null;
+        if (zoneRequired && zone is null)
         {
             problems.Add($"{field} '{text}' has no offset. A civil time without one is not a civil "
                          + "time: write the offset even when it is zero");
@@ -423,14 +533,8 @@ public sealed class SolarEpoch
             return null;
         }
 
-        string zone = match.Groups["z"].Value;
-        TimeSpan offset;
-        if (zone == "Z")
-        {
-            usedUtcDesignator = true;
-            offset = TimeSpan.Zero;
-        }
-        else
+        TimeSpan offset = TimeSpan.Zero;
+        if (zone is not (null or "Z"))
         {
             int offsetHours = int.Parse(zone.AsSpan(1, 2), CultureInfo.InvariantCulture);
             int offsetMinutes = int.Parse(zone.AsSpan(4, 2), CultureInfo.InvariantCulture);

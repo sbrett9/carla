@@ -19,7 +19,8 @@ What it refuses is only what it can establish from the declarations in front of 
 * check 45 -- a label whose `applies_to` excludes the kind of subject it is attached to: a vehicle
   (`entity`) or every vehicle of a flow (`cohort`), the only kinds there are;
 * check 56 -- a parameter that none of the subject's labels declares in its `parameters{}`, a value
-  not of the declared type, and one key that two of its labels declare differently.
+  not of the declared type, and one key that two of its labels declare differently. A `time` value
+  is judged where the supervision plan compiler resolves it, under check 47.
 
 It also projects a term's `hard_negative_for` onto the subjects that carry it: the term is
 the authority, and the record carries a copy so neither the plan nor a sidecar has to be read against
@@ -43,7 +44,7 @@ import carlanet  # noqa: F401  -- loads the CarlaNet assemblies the next import 
 from CarlaNet.Types.Supervision import CoreVocabulary
 
 from carlacontrol.CompileFindings import CompileFindings
-from carlacontrol.ScenarioSchema import ScenarioSchema
+from carlacontrol.ScenarioSchema import TIME_TYPE, ScenarioSchema
 
 CORE_VOCABULARY_VERSION = int(CoreVocabulary.Version)
 CORE_SOURCE = str(CoreVocabulary.Source)
@@ -201,10 +202,10 @@ class AnnotationVocabulary:
 
         A parameter is read against the declaration of every label declaring its key, so two such
         labels must agree on its type and unit: a value carries one meaning. A label that
-        is not a term was refused by `check_labels` and declares nothing here.
+        is not a term was refused by `check_labels` and declares nothing here. A `time` value is
+        judged by `CivilTimeResolver` when the supervision plan compiler resolves it (check 47).
         """
-        declared = {label: self.terms[label].get("parameters", {}) for label in labels
-                    if label in self.terms}
+        declared = self._declared_parameters(labels)
         for key, value in parameters.items():
             declaring = [(label, keys[key]) for label, keys in declared.items() if key in keys]
             if not declaring:
@@ -218,7 +219,8 @@ class AnnotationVocabulary:
                     "type, a unit and a definition: declare it there, or remove it")
                 continue
             for label, declaration in declaring:
-                if ScenarioSchema.validate_against(value, {"type": declaration["type"]}):
+                if declaration["type"] != TIME_TYPE and \
+                        ScenarioSchema.validate_against(value, {"type": declaration["type"]}):
                     self.findings.refuse(
                         PARAMETER_CHECK, where,
                         f"parameter '{key}' is {json.dumps(value)}, and '{label}' declares it "
@@ -232,6 +234,17 @@ class AnnotationVocabulary:
                                                               else "")
                                 for label, d in declaring)
                     + ". One value cannot be read in two ways; declare the key alike or rename one")
+
+    def time_parameters(self, parameters: dict, labels: list[str]) -> list[str]:
+        """The keys of `parameters` that every label declaring them declares `time`. A key the
+        labels declare differently is refused under check 56 and read as no time."""
+        declared = self._declared_parameters(labels)
+        return [key for key in parameters
+                if {keys[key]["type"] for keys in declared.values() if key in keys} == {TIME_TYPE}]
+
+    def _declared_parameters(self, labels: list[str]) -> dict[str, dict]:
+        return {label: self.terms[label].get("parameters", {}) for label in labels
+                if label in self.terms}
 
     def hard_negatives_of(self, labels: list[str]) -> list[str]:
         """The terms a subject carrying these labels is a matched negative for: every label's

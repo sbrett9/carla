@@ -97,8 +97,11 @@ public sealed class SupervisionPlanTests
         Assert.Equal<string>(["bahonar:posting_not_taken_up"], offPost.Labels);
         Assert.Equal(("offpost_d4_h7_t3", CoreVocabulary.SubjectRole),
                      (Assert.Single(offPost.Participants).EntityId, offPost.Participants[0].Role));
-        Assert.Equal(("tower_03", "2026-10-03T07:00:00+03:30"),
-                     (offPost.Parameters["expected_tower"].GetString(), offPost.Parameters["expected_shift_start"].GetString()));
+        Assert.Equal("tower_03", offPost.Parameters["expected_tower"].GetString());
+        Assert.True(plan.Vocabulary.DeclaresTime(offPost.Labels, "expected_shift_start"));
+        Assert.Equal((345_600.0, "2026-10-03T07:00:00+03:30"),
+                     (offPost.Parameters["expected_shift_start"].GetProperty("seconds").GetDouble(),
+                      offPost.Parameters["expected_shift_start"].GetProperty("civil").GetString()));
         Assert.Empty(offPost.AoiRefs);
         PlannedInterval shift = Assert.Single(offPost.Intervals);
         Assert.Equal(("offpost_d4_h7_t3", "dwell"), (shift.EntityId, shift.Phase));
@@ -201,7 +204,8 @@ public sealed class SupervisionPlanTests
         Assert.Equal(("active", 2), (notTakenUp.Status, notTakenUp.Since));
         Assert.Equal<SubjectKind>([SubjectKind.Entity], notTakenUp.AppliesTo);
         Assert.Equal<string>(["expected_shift_start", "expected_tower"], notTakenUp.Parameters.Keys);
-        Assert.All(notTakenUp.Parameters.Values, parameter => Assert.Equal("string", parameter.Type));
+        Assert.Equal((TermParameter.TimeType, "string"),
+                     (notTakenUp.Parameters["expected_shift_start"].Type, notTakenUp.Parameters["expected_tower"].Type));
         Assert.Equal(("term", "bahonar:tower_posting"), (notTakenUp.Counterfactual!.Kind, notTakenUp.Counterfactual.Ref));
 
         Assert.Equal<string>(["bahonar:cleared_gate_transit"], Term(bahonar, "bahonar:standoff_dwell_at_access_point").ContrastWith);
@@ -505,6 +509,56 @@ public sealed class SupervisionPlanTests
                       circuit.Anchor.End.Edge));
         Assert.Null(circuit.Anchor.Start.Lane);
         Assert.Null(circuit.Anchor.Start.EndPositionMetres);
+    }
+
+    [Fact]
+    public void AParameterItsLabelsDeclareATimeIsReadAsItsSecondsAndCivilInstant()
+    {
+        SolarEpoch epoch = SolarLeaseTests.PortEpoch();
+        JsonObject shift = PlanRows.Instance("shift", "annotated", ["test:shift"], [("guard", "subject")]);
+        shift["parameters"] = new JsonObject
+        {
+            ["expected_at"] = PlanRows.Time(345_600, epoch),
+            ["note"] = "2026-03-25T00:00:00+03:30",
+        };
+        JsonObject plan = PlanRows.WithNamespace(
+            PlanRows.Plan([shift]), "test",
+            PlanRows.Term("test:shift", ("expected_at", TermParameter.TimeType), ("note", "string")));
+
+        SupervisionPlan read = PlanRows.Read(plan);
+
+        PatternInstance instance = Assert.Single(read.Instances);
+        Assert.True(read.Vocabulary.DeclaresTime(instance.Labels, "expected_at"));
+        Assert.False(read.Vocabulary.DeclaresTime(instance.Labels, "note"));
+        Assert.False(read.Vocabulary.DeclaresTime(["test:other"], "expected_at"));
+        Assert.Equal(345_600, instance.Parameters["expected_at"].GetProperty("seconds").GetDouble());
+        Assert.Equal("2026-03-25T00:00:00+03:30", instance.Parameters["expected_at"].GetProperty("civil").GetString());
+    }
+
+    [Fact]
+    public void AParameterItsLabelsDeclareATimeAndThatIsNoTimeIsRefusedNamingWhere()
+    {
+        JsonObject asText = PlanRows.Instance("text", "annotated", ["test:shift"], [("guard", "subject")]);
+        asText["parameters"] = new JsonObject { ["expected_at"] = "2026-03-25T00:00:00+03:30" };
+        JsonObject noSeconds = PlanRows.Instance("partial", "annotated", ["test:shift"], [("guard", "subject")]);
+        noSeconds["parameters"] = new JsonObject { ["expected_at"] = new JsonObject { ["civil"] = "2026-03-25T00:00:00+03:30" } };
+        JsonObject plan = PlanRows.WithNamespace(PlanRows.Plan([asText, noSeconds]), "test",
+                                                 PlanRows.Term("test:shift", ("expected_at", TermParameter.TimeType)));
+        string path = Path.Combine(Path.GetTempPath(), $"carlanet-time-{Guid.NewGuid():n}.supervision.json");
+        File.WriteAllText(path, plan.ToJsonString());
+        try
+        {
+            string message = Refusal(path);
+
+            Assert.Contains("(1) plan.instances[0].parameters.expected_at is '2026-03-25T00:00:00+03:30', and its "
+                            + "labels declare it a time, which the compiler writes as an object of its seconds and "
+                            + "its civil instant", message);
+            Assert.Contains("(2) plan.instances[1].parameters.expected_at.seconds is missing", message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     private string Refusal(string path)

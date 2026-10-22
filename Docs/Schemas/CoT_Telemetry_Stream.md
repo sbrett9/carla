@@ -39,7 +39,7 @@ Three tools send it.\
 | Turned on | with the Y key while it runs | by `--udp` | by `--cot-udp` |
 | Destination | `--tak-host` (default `239.2.3.1`, TAK's multicast group) and `--tak-port` (default 6969) | the address given. If no port is given, port 6969. | the address given. If no port is given, port 6969. |
 | Rate | `--rate`, default 5 Hz | `--rate`, default 1 Hz of simulation time | `--cot-hz`, default 1 Hz of simulation time, in whole world ticks: the newest frame of each interval |
-| `time` of each event | the wall clock at the moment the event was formatted | the run's epoch plus the simulation time | the frame's civil time: the scenario's epoch plus the frame's simulated second |
+| `time` of each event | the wall clock at the moment the event was formatted | the run's epoch plus the simulation time | the frame's civil time: the run's epoch plus the frame's simulated second |
 | uid prefix | `CARLA-TRUTH` | `SUMO-TRUTH`, or `--uid-prefix` | `CARLA-TRUTH`, or `--cot-uid-prefix` |
 | Affiliation | `--affiliation`, default `n` | the run's display convention, by population. `--marked-affiliation` sets it for planted vehicles, in the live feed only. | the run's display convention, by population, and `--cot-affiliation`, default `n`, for a population it does not name |
 | Extra detail | `_capture` (the frame) and `_solar` (the sun) | none | none |

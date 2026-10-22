@@ -155,7 +155,6 @@ from carlacontrol.RunTerminationSequence import (
     WRITE_RESULT,
     RunTerminationSequence,
 )
-from carlacontrol.ScenarioEpoch import ScenarioEpoch
 from carlacontrol.SessionMonitor import SessionMonitor
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.StareAim import StareAim
@@ -519,6 +518,7 @@ class CaptureSession:
             road_layer_visible=bool(effective.value("capture.road_layer_visible")),
             signal_layer_visible=bool(effective.value("capture.signal_layer_visible")),
             epoch=effective.epoch_object(),
+            epoch_at=effective.value("scenario.epoch_at"),
             illumination=effective.illumination_object(),
             real_time_factor=float(effective.value("pacing.real_time_factor")) if paced else 0.0,
             pacing_window_s=float(effective.value("pacing.window_s")),
@@ -1207,7 +1207,7 @@ class CaptureSession:
         unadjudicated = len([w for w in self.result.warnings if not w.get("adjudication")])
         gates = self.closeout.gates(snapshot, unadjudicated)
         window = self.effective.window
-        epoch = ScenarioEpoch.read(self.effective.epoch_object())
+        epoch = self.effective.run_epoch
         reached = self.end_reached_s if self.end_reached_s is not None else snapshot["sim_time_s"]
         self.result.produced = {
             "capture_directory": str(self.capture_directory),

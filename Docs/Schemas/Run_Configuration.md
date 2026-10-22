@@ -27,7 +27,8 @@ A run is resolved from six layers, lowest first:
 A field the run configuration leaves out takes its value from a lower layer.\
 Fields marked "world" or "scenario" in the table below are bound by those packages.\
 You can restate a bound field only with the value the package gives it.\
-Any other value is refused (run check 3).
+Any other value is refused (run check 3).\
+To run a scenario's traffic at another civil time, keep `scenario.epoch` and move simulated second zero with `scenario.epoch_at`.
 
 Every run also writes `run.effective.json` beside its result.\
 It is a run configuration too: every field the run resolved.\
@@ -130,8 +131,9 @@ A field with no default must come from some layer, or the launch is refused (run
 | `world.netconvert_version` | string | | none | world | The netconvert release that converted the world. |
 | `scenario.scenario_id` | string | | none | scenario | The scenario's id. |
 | `scenario.lock_sha256` | string, 64 hex digits | | none | scenario | The SHA-256 of the scenario lock the run binds. |
-| `scenario.epoch` | object | | none | scenario | What simulated second zero means in civil time. See [Epoch](Epoch.md). |
+| `scenario.epoch` | object | | none | scenario | What simulated second zero means in civil time, as the scenario was compiled against it. See [Epoch](Epoch.md). `scenario.epoch_at` moves its instant for one run. |
 | `scenario.epoch_block_sha256` | string, 64 hex digits | | none | scenario | The SHA-256 of the epoch object. |
+| `scenario.epoch_at` | string or null, a UTC date and time | | `null` | | The UTC date and time simulated second zero is moved to for this run, such as `2026-10-22T17:40:00Z`. Its short option is `--epoch-at`. The `Z` may be left off. Any other offset is refused (run check 13). The traffic is the scenario's, unchanged. The run's epoch is `scenario.epoch` with its instant moved, shown at the scenario's own offset: 17:40Z on Bahonar, at +03:30, is 21:10 local. The civil span, the sun and every civil time the run records are on it. Null keeps the scenario's epoch. |
 | `scenario.sumo_step_s` | number | s | none | scenario | SUMO's step. |
 | `scenario.sumo_seed` | integer | | none | scenario | SUMO's seed. |
 | `scenario.end_s` | number | s | none | scenario | The simulated second the scenario ends at. |
@@ -206,7 +208,9 @@ carla-capture --run Scenarios/Arapahoe/Arapahoe_I25_SupervisionCheck.run.json --
 ## Versions
 
 This page describes version 1, the only version.\
-A document without `run_configuration_version` is read as version 1.
+A document without `run_configuration_version` is read as version 1.\
+A document written before a run could move simulated second zero has no `scenario.epoch_at`.\
+It takes the default, null, and the run keeps the scenario's epoch.
 
 A document that declares a newer version is refused.\
 The message says to use the release that wrote it.\

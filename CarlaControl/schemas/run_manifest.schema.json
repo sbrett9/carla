@@ -405,7 +405,7 @@
                 "string",
                 "null"
               ],
-              "description": "The scenario epoch's digest; null with no lock."
+              "description": "The digest of the epoch the scenario was compiled against, as the compile lock records it; null with no lock."
             },
             "world_opendrive_sha256": {
               "type": [
@@ -883,7 +883,7 @@
                 "object",
                 "null"
               ],
-              "description": "The scenario's epoch object as declared, which a scenario file defines; null where none was."
+              "description": "The run's epoch object, which a scenario file defines: the epoch declared, or that epoch moved where the run moved simulated second zero; null where none was declared."
             },
             "epoch_declared": {
               "type": "boolean",
@@ -895,7 +895,14 @@
                 "null"
               ],
               "pattern": "^[0-9a-f]{64}$",
-              "description": "The epoch's digest; null where none was declared."
+              "description": "The run's epoch's digest; null where none was declared."
+            },
+            "epoch_moved_from": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "The epoch the scenario was compiled against, where the run moved simulated second zero from it; null where the run moved nothing. Absent from a manifest written before manifests carried it."
             },
             "illumination_declared": {
               "anyOf": [
@@ -997,7 +1004,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "Its parameters, as the author declared them."
+          "description": "Its parameters, as the author declared them, except that a time parameter is written {\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, null where the run declares no epoch."
         },
         "hard_negative_for": {
           "type": [
@@ -1090,7 +1097,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Its declared start as a civil time."
+                "description": "Its declared start as a civil time under the run's epoch; null where it declares no start or the run declares no epoch."
               },
               "declared_end_s": {
                 "type": [
@@ -1105,7 +1112,7 @@
                   "string",
                   "null"
                 ],
-                "description": "Its declared end as a civil time."
+                "description": "Its declared end as a civil time under the run's epoch; null where it declares no end or the run declares no epoch."
               },
               "declared_duration_s": {
                 "type": [
@@ -1193,7 +1200,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "Its parameters, as the author declared them."
+          "description": "Its parameters, as the author declared them, except that a time parameter is written {\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, null where the run declares no epoch."
         },
         "hard_negative_for": {
           "type": [
@@ -1297,7 +1304,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "Its parameters, as the author declared them."
+          "description": "Its parameters, as the author declared them, except that a time parameter is written {\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, null where the run declares no epoch."
         }
       },
       "required": [

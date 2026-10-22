@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CarlaNet.Recording;
 using Xunit.Abstractions;
 
 namespace CarlaNet.CoSim.Tests;
@@ -52,6 +53,44 @@ public sealed class SumoDriveSessionLockTests
         // Its compile ran it in SUMO alone, and the report says what that found.
         Assert.Contains("  dry run          ran with SUMO 1.27.0 over 60 s: 4 vehicles loaded, 4 inserted, 0 "
                         + "discarded, 0 waiting at the end; 1 of 1 planned vehicles inserted; 0 collisions", report);
+    }
+
+    [RequiresSumoFact]
+    public void ASessionOnACompiledScenarioRunsOnItsEpochMovedToTheInstantItIsGiven()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        var carla = new RecordedWorld { Loaded = world.AsLoaded() };
+        SumoDriveSessionOptions options = Options(compiled.Scenario, world);
+        options.TickWorld = null;
+        options.World = carla;
+        options.EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+
+        using SumoDriveSession session = SumoDriveSession.Start(options);
+        Assert.True(session.Advance());
+
+        string report = session.Report.ToString();
+        _output.WriteLine(report);
+        SolarEpoch given = SolarLeaseTests.PortEpoch();
+        Assert.Equal("2026-10-22T21:10:00+03:30", session.Report.Epoch!.CivilDateTimeText);
+        Assert.Equal(given.MovedTo(options.EpochAt.Value).Digest, session.Report.Epoch.Digest);
+        Assert.Equal(given.Digest, session.Report.EpochMovedFrom!.Digest);
+        Assert.Equal(options.EpochAt, session.Report.CompileLock.EpochMovedTo);
+        Assert.Contains("catalogue agree with it; so does the epoch, which the run moves to start at "
+                        + "2026-10-22T17:40:00Z", report);
+        Assert.Contains("epoch              t = 0 is 2026-10-22T21:10:00+03:30 (2026-10-22T17:40:00Z)", report);
+        Assert.Contains("  moved from       the compiled epoch: t = 0 is 2026-03-21T00:00:00+03:30 "
+                        + "(2026-03-20T20:30:00Z)", report);
+
+        // The sun is bound on the moved date at the epoch's own offset, and the first frame is declared on
+        // the moved clock.
+        Assert.Equal((2026, 10, 22), (carla.Sun!.Year, carla.Sun.Month, carla.Sun.Day));
+        Assert.Equal((21, 10, 0), SolarPositionModel.EngineClock(carla.Sun.SolarTime));
+        Assert.Equal(3.5, carla.Sun.TimeZone);
+        Assert.Equal("2026-10-22T21:10:00+03:30", SolarEpoch.FormatCivil(session.Sun!.Declared.WindowOpenCivil));
+        Assert.True(session.Illumination.TryGetDeclaration(1, out IlluminationDeclaration first));
+        Assert.Equal(("2026-10-22T21:10:00+03:30", "2026-10-22T21:10:00+03:30", session.Report.Epoch.Digest),
+                     (first.EpochCivil, first.DeclaredCivil, first.EpochDigest));
     }
 
     [RequiresSumoFact]

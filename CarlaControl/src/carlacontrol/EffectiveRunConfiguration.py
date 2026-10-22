@@ -46,6 +46,7 @@ from carlacontrol.RunConfiguration import (
     SUPPLIED_BY_SITE,
     RunConfiguration,
 )
+from carlacontrol.ScenarioEpoch import ScenarioEpoch
 from carlacontrol.ScenarioPackage import ScenarioPackage
 from carlacontrol.SiteProfile import SiteProfile
 from carlacontrol.WorldPackageReader import WorldPackageReader
@@ -187,7 +188,22 @@ class EffectiveRunConfiguration:
         return document
 
     def epoch_object(self) -> dict | None:
+        """The epoch the scenario was compiled against, which the session checks the lock with."""
         return self.value("scenario.epoch")
+
+    @cached_property
+    def run_epoch(self) -> ScenarioEpoch:
+        """The epoch the run is on: the compiled one, with simulated second zero moved to
+        `scenario.epoch_at` where one is given. Every civil instant the run states is this epoch's.
+        Check 13 refuses an epoch or an instant this cannot read, before anything reads it.
+
+        Raises:
+            ScenarioEpochRefusedError: the compiled epoch is refused.
+            ValueError: the instant is refused.
+        """
+        epoch = ScenarioEpoch.read(self.epoch_object())
+        instant = self.value("scenario.epoch_at")
+        return epoch if instant is None else epoch.moved_to(instant, "scenario.epoch_at")
 
     @cached_property
     def window(self) -> ResolvedWindow:

@@ -11,9 +11,14 @@ echo to the right one.
 
 The rendering is checked to be a rendering: altering the block changes the text, so the text cannot be
 coming from a second computation.
+
+A run that moves simulated second zero (`scenario.epoch_at`) states its civil span and its sun on the
+moved epoch, names that epoch and the compiled one by their digests, worked out here from the epoch
+objects' canonical form, and says so in a line of its own.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -24,7 +29,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "CarlaControl" / "src"))
 sys.path.insert(0, str(_REPO / "CarlaControl" / "test"))
 
-from RunCaptureFixture import ORIGIN, Layout, run_document  # noqa: E402
+from RunCaptureFixture import EPOCH, ORIGIN, Layout, run_document  # noqa: E402
 
 from carlacontrol.LaunchEcho import LaunchEcho  # noqa: E402
 from carlacontrol.RunConfiguration import RunConfiguration  # noqa: E402
@@ -123,3 +128,54 @@ def test_the_rendering_formats_the_block_and_computes_nothing(layout):
     echo.block["captures"]["per_channel"] = 12345
     altered = echo.render()
     assert "1999-01-01T00:00:00+00:00" in altered and "12,345 captures" in altered
+
+
+# -- simulated second zero moved for the run ----------------------------------------------------------
+
+# Midnight on 21 June at the fixture epoch's -07:00, where the scenario's is midnight on 21 March.
+MOVED_TO = "2026-06-21T07:00:00Z"
+
+
+def digest(epoch: dict) -> str:
+    return hashlib.sha256(json.dumps(epoch, sort_keys=True, indent=2).encode("utf-8")).hexdigest()
+
+
+COMPILED_DIGEST = digest(EPOCH)
+MOVED_DIGEST = digest({
+    **EPOCH, "civil_datetime": "2026-06-21T00:00:00-07:00", "utc_datetime": MOVED_TO,
+    "note": "Simulated second zero moved at run time to 2026-06-21T00:00:00-07:00 from "
+            f"2026-03-21T00:00:00-07:00, the epoch {COMPILED_DIGEST}."})
+
+
+def test_a_moved_run_s_civil_span_and_sun_are_on_the_moved_epoch(layout):
+    block = echo_for(layout, [f"scenario.epoch_at={MOVED_TO}"]).to_dict()
+    civil = block["civil"]
+    assert (civil["begin"], civil["end"], civil["first_rendered"]) == (
+        "2026-06-21T07:00:00-07:00", "2026-06-21T07:30:00-07:00", "2026-06-21T06:55:00-07:00")
+    assert civil["epoch"].startswith("t = 0 is 2026-06-21T00:00:00-07:00 (2026-06-21T07:00:00Z)")
+    assert (civil["epoch_block_sha256"], civil["scenario_epoch_block_sha256"], civil["epoch_at"]) == \
+        (MOVED_DIGEST, COMPILED_DIGEST, MOVED_TO)
+    sun = block["sun"]
+    june = SolarPositionModel.sun_position(ORIGIN[0], ORIGIN[1], PACIFIC_DAYLIGHT, False,
+                                           2026, 6, 21, 7, 0, 0).corrected_elevation_deg
+    assert abs(june - corrected_elevation(7, 0)) > 1.0, "the fixture must tell the two dates apart"
+    assert sun["at_begin"]["elevation_deg"] == pytest.approx(june, abs=0.02)
+    assert sun["held_at"] == "2026-06-21 07:00:00"
+
+
+def test_an_unmoved_run_names_one_epoch_by_both_digests_and_no_instant(layout):
+    civil = echo_for(layout).to_dict()["civil"]
+    assert (civil["epoch_block_sha256"], civil["scenario_epoch_block_sha256"], civil["epoch_at"]) == \
+        (COMPILED_DIGEST, COMPILED_DIGEST, None)
+
+
+def test_a_move_to_the_epoch_s_own_instant_names_no_instant(layout):
+    civil = echo_for(layout, ["scenario.epoch_at=2026-03-21T07:00:00Z"]).to_dict()["civil"]
+    assert (civil["epoch_block_sha256"], civil["epoch_at"]) == (COMPILED_DIGEST, None)
+
+
+def test_the_rendering_says_the_epoch_was_moved_and_from_which(layout):
+    text = echo_for(layout, [f"scenario.epoch_at={MOVED_TO}"]).render()
+    assert (f"  epoch       moved at run time to {MOVED_TO} by scenario.epoch_at, from the compiled "
+            f"epoch {COMPILED_DIGEST[:12]}: t = 0 is 2026-06-21T00:00:00-07:00") in text
+    assert "\n  epoch " not in echo_for(layout).render()

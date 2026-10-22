@@ -31,8 +31,9 @@ namespace CarlaNet.CoSim;
 /// <para><b>What reading checks.</b> The shape version; every field the compiler writes, of the kind it
 /// writes; the core values; the anchor grammar; that every instance has a participant and every
 /// interval is one of its instance's participants'; that no cohort is nominal and no instance
-/// unlabelled; and that the vocabulary digests as the plan says, by the compiler's own canonical form.
-/// Every problem is named in one refusal.</para>
+/// unlabelled; that every parameter its labels declare a time carries its seconds and its civil
+/// instant (<see cref="TermParameter.TimeType"/>); and that the vocabulary digests as the plan says, by
+/// the compiler's own canonical form. Every problem is named in one refusal.</para>
 ///
 /// <para><b>What it does not.</b> Whether the plan was compiled against the files a session runs:
 /// <see cref="ScenarioLockCheck"/> compares its digests with them, and the lock's digest with it.
@@ -88,6 +89,7 @@ public sealed record SupervisionPlan
         Series = reading.Rows(root, "series", "plan", RecurringSeries.Read);
         Cohorts = reading.Rows(root, "cohorts", "plan", CohortSupervision.Read);
         Entities = reading.Rows(root, "entities", "plan", EntitySupervision.Read);
+        CheckTimeParameters(reading);
     }
 
     /// <summary>Where the plan was read from.</summary>
@@ -218,6 +220,31 @@ public sealed record SupervisionPlan
                + $"{Counted(Cohorts.Length, "cohort")} ({annotatedCohorts} annotated), "
                + $"{Counted(Entities.Length, "entity", "entities")}; "
                + $"vocabulary core {Vocabulary.CoreVersion}, {namespaces}, digest {Vocabulary.Digest}";
+    }
+
+    /// <summary>Every parameter its row's labels declare a time is the object the compiler writes for one.</summary>
+    private void CheckTimeParameters(SupervisionPlanReading reading)
+    {
+        // Refused already, for its missing vocabulary.
+        if (Vocabulary is null)
+        {
+            return;
+        }
+
+        IEnumerable<(string Where, ImmutableArray<string> Labels, ImmutableSortedDictionary<string, JsonElement> Parameters)> rows =
+            Instances.Select((row, index) => ($"plan.instances[{index}]", row.Labels, row.Parameters))
+                .Concat(Series.Select((row, index) => ($"plan.series[{index}]", row.Labels, row.Parameters)))
+                .Concat(Cohorts.Select((row, index) => ($"plan.cohorts[{index}]", row.Labels, row.Parameters)));
+        foreach ((string where, ImmutableArray<string> labels, ImmutableSortedDictionary<string, JsonElement> parameters) in rows)
+        {
+            foreach ((string key, JsonElement value) in parameters)
+            {
+                if (Vocabulary.DeclaresTime(labels, key))
+                {
+                    reading.TimeParameter(value, $"{where}.parameters.{key}");
+                }
+            }
+        }
     }
 
     private static string Counted(int count, string one, string? many = null) =>

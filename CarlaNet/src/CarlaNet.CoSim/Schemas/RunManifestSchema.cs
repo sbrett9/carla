@@ -206,7 +206,9 @@ public static class RunManifestSchema
                 new JsonField("network_sha256", OrNull(SchemaJson.Text("The network's SHA-256, as the compile lock records it; null with no lock."))),
                 new JsonField("additional_sha256", OrNull(SchemaJson.Text("The additional file's SHA-256, as the compile lock records it; null where there is none."))),
                 new JsonField("catalogue_digest", SchemaJson.Text("The vehicle catalogue's digest.")),
-                new JsonField("epoch_digest", OrNull(SchemaJson.Text("The scenario epoch's digest; null with no lock."))),
+                new JsonField("epoch_digest", OrNull(SchemaJson.Text(
+                    "The digest of the epoch the scenario was compiled against, as the compile lock records it; "
+                    + "null with no lock."))),
                 new JsonField("world_opendrive_sha256", OrNull(SchemaJson.Text(
                     "The world's OpenDRIVE SHA-256 the lock records; null where it records none."))),
                 new JsonField("world_network_fingerprint", OrNull(SchemaJson.Text(
@@ -309,9 +311,14 @@ public static class RunManifestSchema
             new JsonField("solar", SchemaJson.Object(
                 "The epoch and the illumination the run declared.",
                 new JsonField("epoch", OrNull(SchemaJson.AnyObject(
-                    "The scenario's epoch object as declared, which a scenario file defines; null where none was."))),
+                    "The run's epoch object, which a scenario file defines: the epoch declared, or that epoch "
+                    + "moved where the run moved simulated second zero; null where none was declared."))),
                 new JsonField("epoch_declared", SchemaJson.Boolean("Whether an epoch was declared.")),
-                new JsonField("epoch_block_sha256", OrNull(Sha("The epoch's digest; null where none was declared."))),
+                new JsonField("epoch_block_sha256", OrNull(Sha("The run's epoch's digest; null where none was declared."))),
+                new JsonField("epoch_moved_from", OrNull(SchemaJson.AnyObject(
+                    "The epoch the scenario was compiled against, where the run moved simulated second zero from "
+                    + "it; null where the run moved nothing. Absent from a manifest written before manifests "
+                    + "carried it.")), Required: false),
                 new JsonField("illumination_declared", OrNull(SchemaJson.Reference(IlluminationDefinition,
                     "The illumination policy the run declared; null for none."))),
                 new JsonField("illumination_in_force", OrNull(SchemaJson.Reference(IlluminationDefinition,
@@ -332,7 +339,7 @@ public static class RunManifestSchema
             new JsonField("instance_id", SchemaJson.Text("The instance: <scenario_id>/<name>.")),
             new JsonField("supervision", SupervisionState()),
             new JsonField("labels", Terms("The terms it is labeled with.")),
-            new JsonField("parameters", SchemaJson.AnyObject("Its parameters, as the author declared them.")),
+            new JsonField("parameters", Parameters()),
             new JsonField("hard_negative_for", OrNull(Terms("The patterns it is a matched negative for; null for none."))),
             new JsonField("aoi_refs", SchemaJson.List("The areas of interest it names.", SchemaJson.Text("An area of interest."))),
             new JsonField("participants", SchemaJson.List("Its participants.",
@@ -347,9 +354,13 @@ public static class RunManifestSchema
                     new JsonField("anchor_start", OrNull(Anchor("The event its start is anchored to; null where it is declared by time."))),
                     new JsonField("anchor_end", OrNull(Anchor("The event its end is anchored to; null where none is."))),
                     new JsonField("declared_start_s", OrNull(SchemaJson.Number("Its declared start.", Seconds))),
-                    new JsonField("declared_start_civil", OrNull(SchemaJson.Text("Its declared start as a civil time."))),
+                    new JsonField("declared_start_civil", OrNull(SchemaJson.Text(
+                        "Its declared start as a civil time under the run's epoch; null where it declares no start "
+                        + "or the run declares no epoch."))),
                     new JsonField("declared_end_s", OrNull(SchemaJson.Number("Its declared end.", Seconds))),
-                    new JsonField("declared_end_civil", OrNull(SchemaJson.Text("Its declared end as a civil time."))),
+                    new JsonField("declared_end_civil", OrNull(SchemaJson.Text(
+                        "Its declared end as a civil time under the run's epoch; null where it declares no end or "
+                        + "the run declares no epoch."))),
                     new JsonField("declared_duration_s", OrNull(SchemaJson.Number("Its declared duration.", Seconds)))))));
     }
 
@@ -363,7 +374,7 @@ public static class RunManifestSchema
             new JsonField("member_role", SchemaJson.Text("The role each slot's vehicle plays.")),
             new JsonField("supervision", SupervisionState()),
             new JsonField("labels", Terms("The terms it is labeled with.")),
-            new JsonField("parameters", SchemaJson.AnyObject("Its parameters, as the author declared them.")),
+            new JsonField("parameters", Parameters()),
             new JsonField("hard_negative_for", OrNull(Terms("The patterns it is a matched negative for; null for none."))),
             new JsonField("slots", SchemaJson.List("Its slots.",
                 SchemaJson.Object("One slot.",
@@ -380,7 +391,7 @@ public static class RunManifestSchema
             new JsonField("flow_id", SchemaJson.Text("The SUMO flow.")),
             new JsonField("supervision", SupervisionState()),
             new JsonField("labels", Terms("The terms its vehicles are labeled with.")),
-            new JsonField("parameters", SchemaJson.AnyObject("Its parameters, as the author declared them.")));
+            new JsonField("parameters", Parameters()));
 
     private static JsonObject WindowSun(string kind, string end)
     {
@@ -586,6 +597,12 @@ public static class RunManifestSchema
 
     private static JsonObject Terms(string description) =>
         SchemaJson.List(description, SchemaJson.Text("A term, namespace:name.", "^[a-z0-9_]+:[a-z0-9_]+$"));
+
+    private static JsonObject Parameters() =>
+        SchemaJson.AnyObject(
+            "Its parameters, as the author declared them, except that a time parameter is written "
+            + "{\"seconds\", \"civil\"}: its simulated second, and that second's civil time under the run's epoch, "
+            + "null where the run declares no epoch.");
 
     private static JsonObject Anchor(string description) =>
         SchemaJson.Text(description + " An anchor is an event of the vehicle's, a stop or a phase with its index "

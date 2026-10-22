@@ -16,7 +16,8 @@ Each vehicle has its position, motion and size.\
 A vehicle in the picture also has its box in pixels and in latitude, longitude and height.
 
 The still and its sidecar share a name: `<camera>/<camera>_<simulated civil time>.png` and `.xml`, for example `Check_Overhead_1/Check_Overhead_1_20260929_072706.500.xml`.\
-The time in the name is the scenario's simulated civil time at the still's frame, at the epoch's offset, to the millisecond.\
+The time in the name is the simulated civil time at the still's frame, from the run's epoch, at the epoch's offset, to the millisecond.\
+The run's epoch is the scenario's, or the scenario's moved where the run moved simulated second zero, and the run manifest records which.\
 That is the clock the sun was computed from, so the name says what time it was in the scene.\
 The same instant in UTC is the `captured` attribute inside the file.\
 It equals the world truth track's `time_utc` for the frame.\
@@ -68,7 +69,7 @@ The schema marks the "In picture" attributes with `cap:onlyInPicture` and gives 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
 | `format_version` | integer, always 1 | | No | The file's format version. A file written before files carried one has none and is version 1. |
-| `captured` | UTC time | | Yes | The still's instant: the scenario's simulated civil time at the still's frame, from the epoch, in UTC. It equals the world truth track's `time_utc` for the frame. From `carla-sctmv`, which has no epoch, the recording computer's clock. |
+| `captured` | UTC time | | Yes | The still's instant: the simulated civil time at the still's frame, from the run's epoch, in UTC. It equals the world truth track's `time_utc` for the frame. From `carla-sctmv`, which has no epoch, the recording computer's clock. |
 | `count` | integer | | Yes | How many vehicle events follow. The camera platform's event is not counted. |
 | `source` | text, always `truth` | | Yes | The events are the simulator's ground truth. |
 | `tick` | integer | | No | The simulation frame the image was rendered on. Every recorder writes it. |
@@ -161,7 +162,7 @@ The same values are in the still's `carla:illumination` text chunk.
 | `audited` | true or false | | Yes | Whether the world's sun was compared with the declaration on this frame's tick. |
 | `rate` | decimal | seconds per second | No | Sun-clock seconds per simulated second. Under `advance` only. |
 | `freeze_at_civil_time` | time of day | | No | The time of day the sun is held at, hh:mm:ss. Under `freeze_at` only. |
-| `epoch_digest` | text, 64 hex digits | | No | SHA-256 of the scenario's epoch. |
+| `epoch_digest` | text, 64 hex digits | | No | SHA-256 of the run's epoch. |
 | `epoch_civil` | civil time | | No | The civil time that simulated second zero stands for, with its UTC offset. |
 | `utc_offset_hours` | decimal | hours | No | The epoch's declared UTC offset. |
 | `declared_civil` | civil time | | No | This frame's simulated instant as a civil time, with its UTC offset. |

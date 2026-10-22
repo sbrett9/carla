@@ -166,6 +166,7 @@ class DriveRun:
             road_layer_visible=args.show_road_mesh,
             signal_layer_visible=args.show_signals,
             epoch=sun.epoch,
+            epoch_at=sun.epoch_at,
             illumination=sun.illumination,
             real_time_factor=args.real_time_factor,
             sumo_home=sumo.home,
@@ -235,6 +236,11 @@ class DriveRun:
             # planned vehicle enters.
             (logger.warning if compiled.SkippedDryRunAccepted else logger.info)(
                 "dry run: %s", compiled.DryRunText)
+        if session.Report.Epoch is not None:
+            logger.info("epoch: %s", session.Report.Epoch)
+            if session.Report.EpochMovedFrom is not None:
+                logger.info("  moved at run time from the compiled epoch: %s",
+                            session.Report.EpochMovedFrom)
         teleporting = session.Report.Teleporting
         (logger.warning if teleporting.Enabled else logger.info)("teleporting: %s", teleporting)
         logger.info("clock: %s", session.Clock)

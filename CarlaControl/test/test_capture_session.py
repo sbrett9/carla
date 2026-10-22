@@ -149,6 +149,25 @@ def test_the_session_is_started_from_the_compiled_package_and_the_resolved_field
     assert started["sumo_home"] == str(layout.root / "sumo")
 
 
+def test_a_run_that_moves_second_zero_hands_the_session_the_compiled_epoch_and_the_instant(
+        layout, server):
+    _, result = capture(layout, server, overrides=["scenario.epoch_at=2026-06-21T07:00:00Z"])
+    assert result.outcome == "run_finished"
+    started = started_with(server)
+    assert (started["epoch"], started["epoch_at"]) == (EPOCH, "2026-06-21T07:00:00Z")
+    # t = 0 is now midnight on 21 June at the fixture's -07:00, so the morning window is 07:00 to
+    # 07:30 that day.
+    assert result.produced["window"]["civil"] == ["2026-06-21T07:00:00-07:00",
+                                                  "2026-06-21T07:30:00-07:00"]
+
+
+def test_a_run_that_keeps_the_epoch_hands_the_session_no_instant(layout, server):
+    _, result = capture(layout, server)
+    assert started_with(server)["epoch_at"] is None
+    assert result.produced["window"]["civil"] == ["2026-03-21T07:00:00-07:00",
+                                                  "2026-03-21T07:30:00-07:00"]
+
+
 def test_every_run_writes_the_world_truth_track_beside_its_channels(layout, server):
     # The record of what the world contained, which a base rate is taken over: every capture run
     # writes one, at every SUMO frame inside the window, under the capture directory's truth folder.
