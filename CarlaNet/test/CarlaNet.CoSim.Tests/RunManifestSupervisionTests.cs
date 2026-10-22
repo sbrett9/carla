@@ -138,6 +138,74 @@ public sealed class RunManifestSupervisionTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void AnIntervalSDeclaredInstantsAreWrittenOnTheRunSClockAndNullWithNoEpoch()
+    {
+        // The fixture plan's own civil copies are a placeholder, 2026-09-29T07:00:00+03:30, which no row
+        // below names: each is the interval's seconds under the run's epoch.
+        using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        foreach ((string name, SolarEpoch? epoch, DateTimeOffset? at, string? start, string? end) in
+                 new (string, SolarEpoch?, DateTimeOffset?, string?, string?)[]
+                 {
+                     ("moved", SolarLeaseTests.PortEpoch(), SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+                      "2026-10-22T21:10:01+03:30", "2026-10-22T21:10:03+03:30"),
+                     ("compiled", SolarLeaseTests.PortEpoch(), null, "2026-03-21T00:00:01+03:30", "2026-03-21T00:00:03+03:30"),
+                     ("none", null, null, null, null),
+                 })
+        {
+            string manifest = Path.Combine(_directory, name + ".jsonl");
+            SumoDriveSessionOptions options = Options(compiled, world, manifest, 1.0);
+            options.Epoch = epoch;
+            options.EpochAt = at;
+            using (SumoDriveSession session = SumoDriveSession.Start(options))
+            {
+                session.Advance();
+            }
+
+            List<JsonElement> rows = ReadRows(File.ReadAllText(manifest));
+            JsonElement approach = Assert.Single(InstanceRow(rows, "Supervised/approach").GetProperty("intervals").EnumerateArray());
+            Assert.Equal((start, end), (approach.GetProperty("declared_start_civil").GetString(),
+                                        approach.GetProperty("declared_end_civil").GetString()));
+
+            // An interval that declares no instant has none to name, whatever the epoch.
+            JsonElement standoff = Assert.Single(InstanceRow(rows, "Supervised/standoff").GetProperty("intervals").EnumerateArray());
+            Assert.Equal((JsonValueKind.Null, JsonValueKind.Null),
+                         (standoff.GetProperty("declared_start_civil").ValueKind, standoff.GetProperty("declared_end_civil").ValueKind));
+        }
+    }
+
+    [Fact]
+    public void EveryCivilCopyOfTheShippedBahonarPlanIsItsSecondsUnderTheEpochItsLockRecords()
+    {
+        // What makes the manifest's re-derivation the plan's own words for a run that keeps the compiled
+        // epoch: the compiler derived every copy from its seconds with the same function.
+        SupervisionPlan plan = SupervisionPlan.Read(SupervisionPlanTests.ShippedPlan("Shahid_Bahonar_Port_PatternOfLife"));
+        JsonNode locked = JsonNode.Parse(File.ReadAllText(
+            ScenarioLockCheckTests.RepositoryFile("Import", "Shahid_Bahonar_Port_PatternOfLife.lock.json")))!;
+        SolarEpoch epoch = SolarEpoch.FromJson(locked["epoch"]!.ToJsonString());
+        Assert.Equal(locked["epoch_block_sha256"]!.GetValue<string>(), epoch.Digest);
+
+        int copies = 0;
+        foreach (PlannedInterval interval in plan.Instances.SelectMany(instance => instance.Intervals))
+        {
+            Assert.Equal(Civil(epoch, interval.DeclaredStartSeconds), interval.DeclaredStartCivil);
+            Assert.Equal(Civil(epoch, interval.DeclaredEndSeconds), interval.DeclaredEndCivil);
+            copies += (interval.DeclaredStartCivil is null ? 0 : 1) + (interval.DeclaredEndCivil is null ? 0 : 1);
+        }
+
+        // Six declared starts, the escort transits' and the perimeter shadow's, and the ferry stay-behind's end.
+        Assert.Equal(7, copies);
+        foreach (SeriesSlot slot in plan.Series.SelectMany(series => series.Slots))
+        {
+            Assert.Equal(Civil(epoch, slot.DeclaredStartSeconds), slot.DeclaredStartCivil);
+            Assert.Equal(Civil(epoch, slot.DeclaredEndSeconds), slot.DeclaredEndCivil);
+        }
+
+        static string? Civil(SolarEpoch epoch, double? seconds) =>
+            seconds is { } at ? SolarEpoch.FormatCivil(epoch.CivilInstantAt(at)) : null;
+    }
+
+    [RequiresSumoFact]
     public void AManifestCutOffAnywhereNamesAsOpenTheIntervalsTheBinderHeldOpenThen()
     {
         using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();

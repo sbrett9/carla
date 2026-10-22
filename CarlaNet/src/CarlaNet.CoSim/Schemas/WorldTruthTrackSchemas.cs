@@ -225,7 +225,7 @@ public static class WorldTruthTrackSchemas
         static JsonObject Enumeration(IEnumerable<string> words) => new() { ["enum"] = SchemaJson.Array(words) };
 
         Add("time_utc", "datetime",
-            "The row's instant as a UTC time, from the scenario's epoch: the simulated civil time, not the wall "
+            "The row's instant as a UTC time, from the run's epoch: the simulated civil time, not the wall "
             + "clock. Empty where the run declared no epoch.", required: false,
             more: field => field["format"] = InstantFormat);
         Add("sim_time_s", "number", "Simulated time of the SUMO frame the row describes, on TraCI's clock.", Seconds);

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:carla-sumo-capture:schema:png-chunk-illumination:1",
   "title": "PNG text chunk carla:illumination, format version 1",
-  "description": "What the run declared the sun to be for this frame -- the scenario's epoch, the illumination policy, the frame's civil instant and the sun declared for it -- and how far the world's sun was from it. Written only in a run that declares its illumination. This schema describes format version 1; a chunk with no format_version was written before chunks carried one and is version 1.",
+  "description": "What the run declared the sun to be for this frame -- the run's epoch, the illumination policy, the frame's civil instant and the sun declared for it -- and how far the world's sun was from it. Written only in a run that declares its illumination. This schema describes format version 1; a chunk with no format_version was written before chunks carried one and is version 1.",
   "type": "object",
   "properties": {
     "format_version": {
@@ -40,7 +40,7 @@
     "epoch_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
-      "description": "SHA-256 of the scenario's epoch, so a frame separated from its run still names it."
+      "description": "SHA-256 of the run's epoch, so a frame separated from its run still names it."
     },
     "epoch_civil": {
       "type": "string",

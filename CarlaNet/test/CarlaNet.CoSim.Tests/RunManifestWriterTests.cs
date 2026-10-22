@@ -700,6 +700,65 @@ public sealed class RunManifestWriterTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void ARunThatMovesSimulatedSecondZeroWritesItsEpochTheOneMovedFromAndItsWindowOnTheMovedClock()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write();
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        SolarEpoch given = SolarLeaseTests.PortEpoch();
+        DateTimeOffset at = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at");
+        SolarEpoch moved = given.MovedTo(at);
+
+        List<JsonElement> rows = Run("moved.jsonl", at);
+
+        _output.WriteLine(rows[0].GetProperty("solar").GetRawText());
+        JsonElement solar = rows[0].GetProperty("solar");
+        Assert.Equal("2026-10-22T21:10:00+03:30", solar.GetProperty("epoch").GetProperty("civil_datetime").GetString());
+        Assert.Equal(moved.Digest, SolarEpoch.FromJson(solar.GetProperty("epoch").GetRawText()).Digest);
+        Assert.Equal(moved.Digest, solar.GetProperty("epoch_block_sha256").GetString());
+        Assert.Equal(given.Digest, SolarEpoch.FromJson(solar.GetProperty("epoch_moved_from").GetRawText()).Digest);
+        // The lock was checked against the compiled epoch, and the manifest names it so.
+        Assert.Equal(given.Digest, rows[0].GetProperty("scenario").GetProperty("epoch_digest").GetString());
+
+        JsonElement open = Assert.Single(rows, row => Kind(row) == "solar_window_open");
+        Assert.Equal(SolarEpoch.FormatCivil(moved.CivilInstantAt(open.GetProperty("begin_s").GetDouble())),
+                     open.GetProperty("civil_begin").GetString());
+        Assert.StartsWith("2026-10-22T21:10:0", open.GetProperty("civil_begin").GetString());
+        Assert.Equal("2026-10-22", open.GetProperty("solar_date_begin").GetString());
+        Assert.Equal(0.0, open.GetProperty("declared_civil_vs_solar_delta_h").GetDouble(), 6);
+        JsonElement end = Assert.Single(rows, row => Kind(row) == "solar_window_end");
+        Assert.Equal(SolarEpoch.FormatCivil(moved.CivilInstantAt(end.GetProperty("end_s").GetDouble())),
+                     end.GetProperty("civil_end").GetString());
+
+        // Moved to its own instant, the epoch is the compiled one, and nothing is recorded as moved.
+        JsonElement kept = Run("kept.jsonl", given.UtcDateTime)[0].GetProperty("solar");
+        Assert.Equal(given.Digest, kept.GetProperty("epoch_block_sha256").GetString());
+        Assert.Equal(JsonValueKind.Null, kept.GetProperty("epoch_moved_from").ValueKind);
+
+        List<JsonElement> Run(string name, DateTimeOffset epochAt)
+        {
+            string manifest = Path.Combine(_directory, name);
+            var options = new SumoDriveSessionOptions(
+                compiled.Scenario, world.PackagePath, CoSimFixtures.VehicleCatalogue,
+                "test://" + Guid.NewGuid().ToString("n"))
+            {
+                World = new RecordedWorld { Loaded = world.AsLoaded() },
+                Epoch = given,
+                EpochAt = epochAt,
+                Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+                RunManifestPath = manifest,
+            };
+            using (SumoDriveSession session = SumoDriveSession.Start(options))
+            {
+                for (int step = 0; step < 40 && session.Advance(); step++)
+                {
+                }
+            }
+
+            return ReadRows(File.ReadAllText(manifest));
+        }
+    }
+
+    [RequiresSumoFact]
     public void AStartRefusedAfterTheManifestWasOpenedLeavesNone()
     {
         using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");

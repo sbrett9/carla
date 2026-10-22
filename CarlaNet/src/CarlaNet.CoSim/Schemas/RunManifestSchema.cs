@@ -206,7 +206,9 @@ public static class RunManifestSchema
                 new JsonField("network_sha256", OrNull(SchemaJson.Text("The network's SHA-256, as the compile lock records it; null with no lock."))),
                 new JsonField("additional_sha256", OrNull(SchemaJson.Text("The additional file's SHA-256, as the compile lock records it; null where there is none."))),
                 new JsonField("catalogue_digest", SchemaJson.Text("The vehicle catalogue's digest.")),
-                new JsonField("epoch_digest", OrNull(SchemaJson.Text("The scenario epoch's digest; null with no lock."))),
+                new JsonField("epoch_digest", OrNull(SchemaJson.Text(
+                    "The digest of the epoch the scenario was compiled against, as the compile lock records it; "
+                    + "null with no lock."))),
                 new JsonField("world_opendrive_sha256", OrNull(SchemaJson.Text(
                     "The world's OpenDRIVE SHA-256 the lock records; null where it records none."))),
                 new JsonField("world_network_fingerprint", OrNull(SchemaJson.Text(
@@ -309,9 +311,14 @@ public static class RunManifestSchema
             new JsonField("solar", SchemaJson.Object(
                 "The epoch and the illumination the run declared.",
                 new JsonField("epoch", OrNull(SchemaJson.AnyObject(
-                    "The scenario's epoch object as declared, which a scenario file defines; null where none was."))),
+                    "The run's epoch object, which a scenario file defines: the epoch declared, or that epoch "
+                    + "moved where the run moved simulated second zero; null where none was declared."))),
                 new JsonField("epoch_declared", SchemaJson.Boolean("Whether an epoch was declared.")),
-                new JsonField("epoch_block_sha256", OrNull(Sha("The epoch's digest; null where none was declared."))),
+                new JsonField("epoch_block_sha256", OrNull(Sha("The run's epoch's digest; null where none was declared."))),
+                new JsonField("epoch_moved_from", OrNull(SchemaJson.AnyObject(
+                    "The epoch the scenario was compiled against, where the run moved simulated second zero from "
+                    + "it; null where the run moved nothing. Absent from a manifest written before manifests "
+                    + "carried it.")), Required: false),
                 new JsonField("illumination_declared", OrNull(SchemaJson.Reference(IlluminationDefinition,
                     "The illumination policy the run declared; null for none."))),
                 new JsonField("illumination_in_force", OrNull(SchemaJson.Reference(IlluminationDefinition,
@@ -347,9 +354,13 @@ public static class RunManifestSchema
                     new JsonField("anchor_start", OrNull(Anchor("The event its start is anchored to; null where it is declared by time."))),
                     new JsonField("anchor_end", OrNull(Anchor("The event its end is anchored to; null where none is."))),
                     new JsonField("declared_start_s", OrNull(SchemaJson.Number("Its declared start.", Seconds))),
-                    new JsonField("declared_start_civil", OrNull(SchemaJson.Text("Its declared start as a civil time."))),
+                    new JsonField("declared_start_civil", OrNull(SchemaJson.Text(
+                        "Its declared start as a civil time under the run's epoch; null where it declares no start "
+                        + "or the run declares no epoch."))),
                     new JsonField("declared_end_s", OrNull(SchemaJson.Number("Its declared end.", Seconds))),
-                    new JsonField("declared_end_civil", OrNull(SchemaJson.Text("Its declared end as a civil time."))),
+                    new JsonField("declared_end_civil", OrNull(SchemaJson.Text(
+                        "Its declared end as a civil time under the run's epoch; null where it declares no end or "
+                        + "the run declares no epoch."))),
                     new JsonField("declared_duration_s", OrNull(SchemaJson.Number("Its declared duration.", Seconds)))))));
     }
 

@@ -196,6 +196,29 @@ public sealed class CaptureSchemaWriterTests : IDisposable
     }
 
     [RequiresSumoFact]
+    public void ARunThatMovesSimulatedSecondZeroKeepsTheSchema()
+    {
+        using CompiledFixture compiled = CompiledFixture.Write(plan: true);
+        using SyntheticWorld world = SyntheticWorld.Write(_ => 0.0, CoSimFixtures.RightAngleTurnNetwork, "!");
+        string manifest = Path.Combine(_directory, "moved", "manifest.jsonl");
+        Drive(new SumoDriveSessionOptions(
+            compiled.Scenario, world.PackagePath, CoSimFixtures.VehicleCatalogue, "test://" + Guid.NewGuid().ToString("n"))
+        {
+            World = new RecordedWorld { Loaded = world.AsLoaded() },
+            Epoch = SolarLeaseTests.PortEpoch(),
+            EpochAt = SolarEpoch.ReadInstant("2026-10-22T17:40:00Z", "epoch_at"),
+            Illumination = IlluminationPolicy.FreezeAtWindowStart(),
+            RunManifestPath = manifest,
+        });
+
+        AssertRows(manifest, ["manifest_opened", "instance", "render_admitted", "solar_window_open",
+                              "solar_window_end", "manifest_closed"]);
+        JsonNode opened = JsonNode.Parse(File.ReadLines(manifest).First())!;
+        Assert.Equal("2026-03-21T00:00:00+03:30",
+                     opened["solar"]!["epoch_moved_from"]!["civil_datetime"]!.GetValue<string>());
+    }
+
+    [RequiresSumoFact]
     public void ASupervisedRunSPlanAndIntervalRowsKeepTheSchema()
     {
         using CompiledFixture compiled = SupervisionBinderSessionTests.Supervised();

@@ -39,11 +39,15 @@ namespace CarlaNet.CoSim;
 /// the supervision plan and its vocabulary, the SUMO settings the session checked and runs under, the
 /// clock, the render set, the rule the vehicle lights follow (<c>vehicle_lights</c>: whether they are
 /// driven, the sun elevations the headlights switch at and which elevation they read, and that brake
-/// lights and turn signals follow SUMO's signals), and the epoch and illumination declared.</description></item>
+/// lights and turn signals follow SUMO's signals), the run's epoch (<see cref="CoSimRunReport.Epoch"/>)
+/// with the compiled epoch it was moved from where the run moved simulated second zero, and the
+/// illumination declared.</description></item>
 /// <item><term><c>instance</c>, <c>series</c>, <c>cohort</c></term><description>Next, where the compile
 /// lock binds a supervision plan: each of its pattern instances, recurring series and cohorts as declared
 /// -- identity, supervision state, labels and parameters, an instance's participants with their roles and
-/// the intervals it declares with their anchors, a series' slots.</description></item>
+/// the intervals it declares with their anchors, a series' slots. An interval's declared instants are
+/// written in civil time under the run's epoch, from their simulated seconds, so a run that moves
+/// simulated second zero names them on its own clock.</description></item>
 /// <item><term><c>interval_opened</c>, <c>interval_closed</c></term><description>One of the plan's
 /// intervals as the supervision binder opens and closes it, named by its <c>(instance_id, participant,
 /// phase)</c> triple: the declared onsets, the committed onset by TraCI's clock, the rendered frame that
@@ -708,7 +712,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         SupervisionPlan? plan = compile.Plan;
         SumoDistributionEditCheck edits = report.DistributionEdits;
         CoSimClock clock = report.Clock;
-        SolarEpoch? epoch = _options.Epoch;
+        SolarEpoch? epoch = report.Epoch;
         // Declared is what the run named. In force is what the session ran under: the default where
         // the run named no policy. A defaulted policy is written as in force and never as declared.
         IlluminationPolicy? declared = _options.Illumination is { Defaulted: false } named ? named : null;
@@ -858,18 +862,11 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
             json.WriteStartObject("solar");
             json.WritePropertyName("epoch");
-            if (epoch is null)
-            {
-                json.WriteNullValue();
-            }
-            else
-            {
-                using JsonDocument declared = JsonDocument.Parse(epoch.CanonicalJson);
-                declared.RootElement.WriteTo(json);
-            }
-
+            WriteEpoch(json, epoch);
             json.WriteBoolean("epoch_declared", epoch is not null);
             json.WriteString("epoch_block_sha256", epoch?.Digest);
+            json.WritePropertyName("epoch_moved_from");
+            WriteEpoch(json, report.EpochMovedFrom);
             json.WritePropertyName("illumination_declared");
             WriteIllumination(json, declared, asDeclared: true);
             json.WritePropertyName("illumination_in_force");
@@ -880,6 +877,19 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
 
             json.WriteString("world_truth_track", _options.WorldTruthTrackPath);
         });
+    }
+
+    /// <summary>An epoch's canonical object, or null.</summary>
+    private static void WriteEpoch(Utf8JsonWriter json, SolarEpoch? epoch)
+    {
+        if (epoch is null)
+        {
+            json.WriteNullValue();
+            return;
+        }
+
+        using JsonDocument canonical = JsonDocument.Parse(epoch.CanonicalJson);
+        canonical.RootElement.WriteTo(json);
     }
 
     /// <summary>
@@ -1048,7 +1058,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
     private void WriteWindowOpen(RenderedFrameRecord frame)
     {
         SolarLease? lease = _report.Sun;
-        SolarEpoch? epoch = _options.Epoch;
+        SolarEpoch? epoch = _report.Epoch;
         double begin = Rendered(frame.SimulatedTimeSeconds);
         WriteRow(WindowOpenRow, json =>
         {
@@ -1345,9 +1355,9 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
                     json.WriteString("anchor_start", planned.Anchor?.Start.Spelled);
                     json.WriteString("anchor_end", planned.Anchor?.End?.Spelled);
                     WriteNumberOrNull(json, "declared_start_s", planned.DeclaredStartSeconds);
-                    json.WriteString("declared_start_civil", planned.DeclaredStartCivil);
+                    json.WriteString("declared_start_civil", CivilOnTheRunSClock(planned.DeclaredStartSeconds));
                     WriteNumberOrNull(json, "declared_end_s", planned.DeclaredEndSeconds);
-                    json.WriteString("declared_end_civil", planned.DeclaredEndCivil);
+                    json.WriteString("declared_end_civil", CivilOnTheRunSClock(planned.DeclaredEndSeconds));
                     WriteNumberOrNull(json, "declared_duration_s", planned.DeclaredDurationSeconds);
                     json.WriteEndObject();
                 }
@@ -1396,6 +1406,14 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         }
     }
 
+    /// <summary>
+    /// A simulated second as a civil time under the run's epoch, or null where there is no second or no
+    /// epoch. The plan's own civil copies name the compiled epoch's clock, which a run that moves
+    /// simulated second zero is not on.
+    /// </summary>
+    private string? CivilOnTheRunSClock(double? seconds) =>
+        seconds is { } at && _report.Epoch is { } epoch ? SolarEpoch.FormatCivil(epoch.CivilInstantAt(at)) : null;
+
     private static void WriteStrings(Utf8JsonWriter json, string name, IEnumerable<string> values)
     {
         json.WriteStartArray(name);
@@ -1436,7 +1454,7 @@ public sealed class RunManifestWriter : ISumoStepObserver, ISupervisionIntervalS
         RenderedFrameRecord? last = _lastWindowCapture;
         SolarAudit? audit = _report.SunAudit;
         SolarLease? lease = _report.Sun;
-        SolarEpoch? epoch = _options.Epoch;
+        SolarEpoch? epoch = _report.Epoch;
         IlluminationPolicy? policy = _report.Illumination;
         bool noSun = lease is null ? last?.Sun is null : lease.NoSun;
         bool withinTolerance = audit is not null && audit.Failure is null;

@@ -10,7 +10,7 @@
       "name": "time_utc",
       "type": "datetime",
       "format": "%Y-%m-%dT%H:%M:%S.%fZ",
-      "description": "The row's instant as a UTC time, from the scenario's epoch: the simulated civil time, not the wall clock. Empty where the run declared no epoch."
+      "description": "The row's instant as a UTC time, from the run's epoch: the simulated civil time, not the wall clock. Empty where the run declared no epoch."
     },
     {
       "name": "sim_time_s",

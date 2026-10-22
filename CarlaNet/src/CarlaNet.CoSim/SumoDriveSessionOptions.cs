@@ -263,8 +263,8 @@ public sealed record SumoDriveSessionOptions(
     /// <remarks>
     /// <para>The scenario's traffic, unchanged, at another civil time. The session checks the compile lock
     /// against <see cref="Epoch"/> as given, then runs on <see cref="SolarEpoch.MovedTo"/> of it: the
-    /// sun, every frame's civil instant, the world truth track and the live track take the moved clock.
-    /// The report keeps the epoch moved from
+    /// sun, every frame's civil instant, the world truth track, the live track and the run manifest take
+    /// the moved clock. The report keeps the epoch moved from
     /// (<see cref="CoSimRunReport.EpochMovedFrom"/>).</para>
     ///
     /// <para>Refused before anything is started without an <see cref="Epoch"/> to move, at an offset

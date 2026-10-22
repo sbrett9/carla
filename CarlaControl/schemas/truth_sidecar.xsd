@@ -383,7 +383,7 @@
     </xs:attribute>
     <xs:attribute name="captured" type="Instant" use="required">
       <xs:annotation>
-        <xs:documentation>The still's instant, in UTC. From a SUMO drive, the simulated civil time of the still's frame, from the scenario's epoch: the same instant as the world truth track's time_utc for the frame, and the instant the still is named by, at the epoch's offset. From an SCTMV capture, which has no epoch, the recording computer's wall clock. Never the wall clock from a SUMO drive: that is the producer's written_utc.</xs:documentation>
+        <xs:documentation>The still's instant, in UTC. From a SUMO drive, the simulated civil time of the still's frame, from the run's epoch: the same instant as the world truth track's time_utc for the frame, and the instant the still is named by, at the epoch's offset. From an SCTMV capture, which has no epoch, the recording computer's wall clock. Never the wall clock from a SUMO drive: that is the producer's written_utc.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="count" type="xs:nonNegativeInteger" use="required">
@@ -683,7 +683,7 @@
     </xs:attribute>
     <xs:attribute name="epoch_digest" type="Sha256" use="optional">
       <xs:annotation>
-        <xs:documentation>SHA-256 of the scenario's epoch.</xs:documentation>
+        <xs:documentation>SHA-256 of the run's epoch.</xs:documentation>
       </xs:annotation>
     </xs:attribute>
     <xs:attribute name="epoch_civil" type="CivilInstant" use="optional">

@@ -51,7 +51,7 @@ In the Required column, "Yes" means the cell is never empty.
 
 | Name | Type | Unit | Required | Meaning |
 |---|---|---|---|---|
-| `time_utc` | date-time | | No | The row's instant as a UTC time, from the scenario's epoch: simulated civil time, not the wall clock. The epoch is the civil time that simulated second zero stands for. Empty where the run declared no epoch. |
+| `time_utc` | date-time | | No | The row's instant as a UTC time, from the run's epoch: simulated civil time, not the wall clock. The epoch is the civil time that simulated second zero stands for: the scenario's, or the scenario's moved where the run moved simulated second zero. Empty where the run declared no epoch. |
 | `sim_time_s` | number | seconds | Yes | Simulated time of the SUMO frame the row describes, on TraCI's clock. |
 | `uid` | string | | Yes | `CARLA-TRUTH-SUMO-<sumo_id>`: the same uid a sidecar gives the vehicle. |
 | `callsign` | string | | Yes | `<base_type>-<sumo_id>`, as in a sidecar. |

@@ -208,7 +208,7 @@ public static class PngChunkSchemas
                 "The civil time of day the sun is held at, under the freeze_at policy only.", ClockPattern),
                 Required: false),
             new JsonField("epoch_digest", SchemaJson.Text(
-                "SHA-256 of the scenario's epoch, so a frame separated from its run still names it.", Sha256Pattern),
+                "SHA-256 of the run's epoch, so a frame separated from its run still names it.", Sha256Pattern),
                 Required: false),
             new JsonField("epoch_civil", SchemaJson.Text(
                 "The civil instant simulated second zero stands for, with its UTC offset.", CivilPattern),
@@ -240,7 +240,7 @@ public static class PngChunkSchemas
                 "The world's refraction-corrected elevation minus the declared one, where the world reports it.",
                 unit: "degrees"), Required: false));
         return Close(Head(keyword,
-                          "What the run declared the sun to be for this frame -- the scenario's epoch, the "
+                          "What the run declared the sun to be for this frame -- the run's epoch, the "
                           + "illumination policy, the frame's civil instant and the sun declared for it -- and how far "
                           + "the world's sun was from it. Written only in a run that declares its illumination."),
                      body);

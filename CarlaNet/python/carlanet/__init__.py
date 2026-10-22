@@ -2651,8 +2651,9 @@ class World:
         against as given, and the run is on that epoch moved: its civil date and time and its UTC
         instant are the new instant at the epoch's own offset, its note says where it was moved from,
         and its offset, daylight saving, zone and calendar are kept. The traffic is unchanged; the sun,
-        every frame's civil instant, the stills' names and stamps, the world truth track and the live
-        track take the moved clock. `epoch_at` is refused before anything starts without `epoch`, and
+        every frame's civil instant, the stills' names and stamps, the world truth track, the live
+        track and the run manifest take the moved clock; the manifest records the compiled epoch as
+        `solar.epoch_moved_from`. `epoch_at` is refused before anything starts without `epoch`, and
         on a scenario with no compile lock beside it. `session.Report.Epoch` is the run's epoch and
         `session.Report.EpochMovedFrom` the compiled one, or None where nothing moved: an `epoch_at`
         that is the epoch's own instant moves nothing. `illumination` says what the sun does
