@@ -566,11 +566,19 @@ class RunConfigurationValidator:
         if epoch is None:
             return
         try:
-            ScenarioEpoch.read(epoch)
+            compiled = ScenarioEpoch.read(epoch)
         except ScenarioEpochRefusedError as refusal:
             for _check, problem in refusal.problems:
                 findings.refuse(13, "scenario.epoch", f"the window's civil span cannot be "
                                 f"computed: {problem}")
+            return
+        instant = effective.value("scenario.epoch_at")
+        if instant is None:
+            return
+        try:
+            compiled.moved_to(instant, "scenario.epoch_at")
+        except ValueError as refusal:
+            findings.refuse(13, "scenario.epoch_at", str(refusal))
 
     # -- check 15 ---------------------------------------------------------------------------------
     @staticmethod

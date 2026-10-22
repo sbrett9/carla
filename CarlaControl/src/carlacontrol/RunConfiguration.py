@@ -439,10 +439,18 @@ _FIELDS: tuple[RunField, ...] = (
     _F("scenario.lock_sha256", _SHA256, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
        help="The digest of the scenario lock the run binds."),
     _F("scenario.epoch", {"type": "object"}, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
-       help="What simulated second zero means in civil time. A binding: a run that rendered "
-            "another time would contradict its own scenario."),
+       help="What simulated second zero means in civil time, as the scenario was compiled against "
+            "it. A binding, restated only with the lock's value: scenario.epoch_at moves its "
+            "instant for one run and keeps the rest of it."),
     _F("scenario.epoch_block_sha256", _SHA256, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
        help="The epoch's digest."),
+    _F("scenario.epoch_at", _nullable(_TEXT), None, SESSION_FIXED, alias="--epoch-at",
+       help="The UTC date and time simulated second zero is moved to for this run, such as "
+            "2026-10-22T17:40:00Z, or null to keep the scenario's own. The Z may be left off; "
+            "any other offset is refused (check 13). The traffic is the scenario's, unchanged. "
+            "The run's epoch is scenario.epoch with its instant moved, shown at the scenario's own "
+            "offset: 17:40Z on Bahonar, at +03:30, is 21:10 local. The civil span, the sun and "
+            "every civil time the run records are on it."),
     _F("scenario.sumo_step_s", _POSITIVE, NO_DEFAULT, BOUND, SUPPLIED_BY_SCENARIO,
        help="SUMO's step. Never changed to suit the renderer."),
     _F("scenario.sumo_seed", {"type": "integer", "minimum": 0}, NO_DEFAULT, BOUND,

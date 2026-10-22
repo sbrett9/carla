@@ -54,7 +54,7 @@ Every field is always present, except `producer` in a file written before Octobe
 | `inputs.world_network_fingerprint` | string, 64 hex digits | | The canonical fingerprint of the world's SUMO network. |
 | `inputs.world_opendrive_sha256` | string | | SHA-256 of the world's OpenDRIVE. |
 | `inputs.catalogue_digest` | string | | The digest of the vehicle catalog the scenario was compiled against. |
-| `inputs.epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the scenario's epoch object. |
+| `inputs.epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the scenario's epoch object, the one it was compiled against. A run that moves simulated second zero records the instant as `scenario.epoch_at` in its effective configuration, and the moved epoch's digest in its launch echo. |
 | `inputs.sumo_seed` | integer | | SUMO's seed. |
 | `adjudications` | array | | How each warning was handled: `code`, `adjudication` (`proceed`) and `adjudicated_by` (the `on_warning` field's source, or "the operator at the terminal"). |
 | `expectations` | object | | The configuration's `expect` block, as given. |
@@ -153,7 +153,9 @@ Shortened (`...` marks left-out entries):
 
 This page describes version 1, the only version.\
 A file written before October 7, 2026 has no `producer`.\
-It is still version 1.
+It is still version 1.\
+A file written before a run could move simulated second zero has no `scenario.epoch_at` among its effective configuration's fields.\
+The schema requires every field, so `carla-validate` reports the field missing.
 
 Because no tool reads a run lock back, no tool refuses one.\
 Read version 1 and refuse a newer version rather than read it in part.

@@ -103,6 +103,19 @@ def test_a_finished_run_s_four_records_conform(layout):
     assert problems(result["launch_echo"], "launch_echo.schema.json") == []
 
 
+def test_the_records_of_a_run_that_moves_second_zero_conform(layout):
+    records = capture(layout, overrides=["scenario.epoch_at=2026-06-21T07:00:00Z"])
+    result = read(records["result"])
+    assert result["outcome"] == "run_finished"
+    assert result["launch_echo"]["civil"]["epoch_at"] == "2026-06-21T07:00:00Z"
+    assert problems(result, "run_result.schema.json") == []
+    assert problems(read(records["resolution"]), "run_resolution.schema.json") == []
+    assert problems(read(records["lock"]), "run_lock.schema.json") == []
+    effective = read(records["effective"])
+    assert effective["scenario"]["epoch_at"] == "2026-06-21T07:00:00Z"
+    assert problems(effective, "run_configuration.schema.json") == []
+
+
 def test_an_offline_refusal_s_records_conform(layout):
     records = capture(layout, overrides=["capture.world_delta_s=0.03"])
     assert sorted(records) == ["resolution", "result"]

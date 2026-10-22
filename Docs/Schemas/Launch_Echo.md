@@ -25,6 +25,8 @@ The launch echo is what a capture run says it is about to do, before it acquires
 Before any time is spent, the echo shows you a run that is not the one you meant.
 
 Every figure comes from the code that will act on it.\
+Where the run moves simulated second zero with `scenario.epoch_at`, the civil span and the sun are on the moved epoch.\
+The echo then names the instant and both epochs, and the terminal shows an `epoch` line.\
 The echo also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
 
 ## Writers and readers
@@ -61,9 +63,12 @@ The echo also says what it cannot predict, in `not_predicted`: for example the w
 | `captures.per_channel` | integer | | Captures each channel will make. |
 | `captures.total` | integer | | Captures over every channel. |
 | `captures.frames_per_hour` | integer | | Captures per simulated hour over every channel. |
-| `civil.begin`, `civil.end` | string | | The window's begin and end in civil time, ISO 8601 with offset. |
+| `civil.begin`, `civil.end` | string | | The window's begin and end in civil time, ISO 8601 with offset, on the run's epoch. |
 | `civil.first_rendered` | string | | The first rendered instant in civil time. |
-| `civil.epoch` | string | | The scenario's epoch in one line. |
+| `civil.epoch` | string | | The run's epoch in one line: the scenario's, or that epoch with simulated second zero moved by `scenario.epoch_at`. |
+| `civil.epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the run's epoch. The run manifest's `solar.epoch_block_sha256` and each still's illumination chunk carry the same digest. |
+| `civil.scenario_epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the epoch the scenario was compiled against, `scenario.epoch_block_sha256`. It differs from `civil.epoch_block_sha256` only where the run moved simulated second zero. |
+| `civil.epoch_at` | string or null | | The UTC instant the run moved simulated second zero to, such as `2026-10-22T17:40:00Z`. Null where the run keeps the compiled epoch's instant, including where `scenario.epoch_at` names that instant. |
 | `sun.policy` | one of `freeze_at_window_start`, `advance`, `freeze_at`, `ignore` | | What the sun does across the window. |
 | `sun.binds` | boolean | | Whether the policy sets the sun. False only for `ignore`. That policy leaves the world's sun alone and adds a `statement`. |
 | `sun.advances` | boolean | | Whether the sun moves across the window. |
@@ -131,7 +136,9 @@ Shortened from a real run:
   "captures": {"capture_hz": 2.0, "channels": 1, "per_channel": 360, "total": 360,
                "frames_per_hour": 7200},
   "civil": {"begin": "2026-09-29T07:27:00-06:00", "end": "2026-09-29T07:30:00-06:00",
-            "first_rendered": "2026-09-29T07:26:00-06:00", "epoch": "t = 0 is ..."},
+            "first_rendered": "2026-09-29T07:26:00-06:00", "epoch": "t = 0 is ...",
+            "epoch_block_sha256": "b92057175df8...", "scenario_epoch_block_sha256": "b92057175df8...",
+            "epoch_at": null},
   "sun": {"policy": "freeze_at_window_start", "binds": true, "advances": false, "rate": null,
           "elevation_kind": "refraction_corrected", "window_open_s": 60.0,
           "at_begin": {"seconds": 60.0, "sun_date": "2026-09-29", "sun_clock": "07:27:00",
@@ -147,6 +154,8 @@ Shortened from a real run:
 ## Versions
 
 This page describes version 1, the only version.\
+An echo written before a run could move simulated second zero has no `civil.epoch_block_sha256`, `civil.scenario_epoch_block_sha256` or `civil.epoch_at`.\
+Its civil times are on the scenario's epoch, and it is still version 1.\
 No tool reads the echo back from a file.\
 If you write a reader, have it read version 1.\
 Have it refuse a newer version rather than read it in part.

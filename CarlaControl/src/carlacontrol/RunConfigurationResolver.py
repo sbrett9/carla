@@ -73,6 +73,12 @@ _POLICY_FIELDS = {
 }
 PINNED_RATE = 1.0
 
+# Check 3's refusal of a restated epoch says how to move the traffic to another civil time without
+# recompiling the scenario.
+_EPOCH_BINDINGS = ("scenario.epoch", "scenario.epoch_block_sha256")
+_MOVE_THE_EPOCH = (". To run the scenario's traffic at another civil time, keep scenario.epoch and "
+                   "move simulated second zero with scenario.epoch_at (--epoch-at)")
+
 # Where each world binding is read from in world.json.
 _WORLD_KEYS = {
     "world.map_name": "MapName",
@@ -303,7 +309,8 @@ class RunConfigurationResolver:
             findings.refuse(3, path, f"'{path}' is bound by {provenance} "
                             f"({json.dumps(value)}); {source} gives {json.dumps(restated_value)}. "
                             "A binding cannot be overridden: rebuild the world or recompile the "
-                            "scenario to change it")
+                            "scenario to change it"
+                            + (_MOVE_THE_EPOCH if path in _EPOCH_BINDINGS else ""))
         return FieldResolution(value, layer, provenance, spec.default, note=note)
 
     @staticmethod

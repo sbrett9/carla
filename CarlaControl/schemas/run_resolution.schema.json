@@ -400,7 +400,7 @@
         },
         "civil": {
           "type": "object",
-          "description": "The civil span.",
+          "description": "The civil span, on the run's epoch.",
           "required": [
             "begin",
             "end",
@@ -422,7 +422,28 @@
             },
             "epoch": {
               "type": "string",
-              "description": "The epoch in one line."
+              "description": "The run's epoch in one line: the scenario's, or that epoch with simulated second zero moved by scenario.epoch_at."
+            },
+            "epoch_block_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 of the run's epoch, in its canonical form, as the run manifest's solar.epoch_block_sha256 and each still's illumination chunk carry it."
+            },
+            "scenario_epoch_block_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "description": "SHA-256 of the epoch the scenario was compiled against, scenario.epoch_block_sha256."
+            },
+            "epoch_at": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The UTC instant the run moved simulated second zero to; null where it keeps the compiled epoch's."
             }
           },
           "additionalProperties": false
@@ -1075,6 +1096,7 @@
             "scenario.lock_sha256",
             "scenario.epoch",
             "scenario.epoch_block_sha256",
+            "scenario.epoch_at",
             "scenario.sumo_step_s",
             "scenario.sumo_seed",
             "scenario.end_s",
@@ -1279,6 +1301,9 @@
             },
             "scenario.epoch_block_sha256": {
               "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.epoch_at": {
+              "$ref": "#/$defs/resolved_field_with_default"
             },
             "scenario.sumo_step_s": {
               "$ref": "#/$defs/resolved_field"

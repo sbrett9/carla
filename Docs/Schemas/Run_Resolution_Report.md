@@ -87,3 +87,7 @@ Read version 1 and refuse a newer version rather than read it in part.
 A file written before October 7, 2026 has no `producer`.\
 It is possible that it names the check catalog differently.\
 It is still version 1.
+
+A file written before a run could move simulated second zero has no `scenario.epoch_at` among its effective configuration's fields.\
+The schema requires every field, so `carla-validate` reports the field missing.\
+Its launch echo has no `civil.epoch_block_sha256`, `civil.scenario_epoch_block_sha256` or `civil.epoch_at`, which the schema does not require.

@@ -440,6 +440,7 @@
             "scenario.lock_sha256",
             "scenario.epoch",
             "scenario.epoch_block_sha256",
+            "scenario.epoch_at",
             "scenario.sumo_step_s",
             "scenario.sumo_seed",
             "scenario.end_s",
@@ -644,6 +645,9 @@
             },
             "scenario.epoch_block_sha256": {
               "$ref": "#/$defs/resolved_field"
+            },
+            "scenario.epoch_at": {
+              "$ref": "#/$defs/resolved_field_with_default"
             },
             "scenario.sumo_step_s": {
               "$ref": "#/$defs/resolved_field"

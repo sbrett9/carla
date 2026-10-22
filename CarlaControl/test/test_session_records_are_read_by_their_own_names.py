@@ -14,6 +14,7 @@ counted for the window only once the step it governs has been rendered.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -29,11 +30,12 @@ from CarlaNet.CoSim import (  # noqa: E402
     CoSimPoseRecord,
     LaneInterpolationCase,
     ScenarioLockCheck,
+    SolarEpoch,
     TeleportingCheck,
     VehicleCatalogue,
     VehiclePose,
 )
-from RunCaptureFixture import CATALOGUE, SCENARIO_ID, Layout  # noqa: E402
+from RunCaptureFixture import CATALOGUE, EPOCH, SCENARIO_ID, Layout  # noqa: E402
 
 from carlacontrol.RenderedTrafficCentre import RenderedTrafficCentre  # noqa: E402
 from carlacontrol.RunCloseoutReport import RunCloseoutReport  # noqa: E402
@@ -149,3 +151,22 @@ def test_the_scenario_checks_are_read_by_the_session_s_names(tmp_path):
     assert checks["teleporting"] == {"enabled": False, "accepted": False, "seconds": -1.0,
                                      "declared": "-1",
                                      "statement": "disabled (time-to-teleport '-1')"}
+
+
+def test_a_run_that_moves_second_zero_is_read_from_the_session_s_own_lock_check(tmp_path):
+    """The compiled epoch and the instant, as CaptureSession hands them to the session, which reads
+    the instant with `SolarEpoch.ReadInstant` and checks the lock against the epoch as given."""
+    layout = Layout(tmp_path)
+    configuration = str(layout.lock.parent / f"{SCENARIO_ID}.sumocfg")
+    instant = SolarEpoch.ReadInstant("2026-06-21T07:00:00Z", "epoch_at")
+
+    class Report:
+        CompileLock = ScenarioLockCheck.Require(
+            configuration, VehicleCatalogue.Load(str(CATALOGUE)),
+            SolarEpoch.FromJson(json.dumps(EPOCH)), instant, False)
+        Teleporting = TeleportingCheck.Require(configuration, False)
+
+    lock = RunCloseoutReport.scenario_checks_of(Report)["compile_lock"]
+    assert lock["compiled"] is True
+    assert lock["statement"].endswith(
+        "so does the epoch, which the run moves to start at 2026-06-21T07:00:00Z")
