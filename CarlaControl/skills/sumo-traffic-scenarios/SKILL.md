@@ -186,6 +186,13 @@ Every scenario declares what civil instant `t = 0` is — the `epoch` object:
 6. **Declare the offset in force on the scenario's dates**, with `dst_in_effect` saying whether it
    includes daylight saving: Colorado in late March is −06:00 with `dst_in_effect: true`. One offset holds
    for the whole run.
+7. **Moving `t = 0` for one run needs no recompile.** `carla-drive --epoch-at` and `carla-capture`'s
+   `scenario.epoch_at` (`--epoch-at`) take the UTC instant step 0 is to be, the `Z` optional and any
+   other offset refused. The traffic is the same, second for second; the run shows the instant at the
+   scenario's own offset, and the sun, the stills, the truth and the manifest follow it. Bahonar's step 0
+   is the 07:00 shift change, so `--epoch-at 2026-10-23T03:30:00Z` puts it at 07:00 local on 23 October.
+   The compile lock is checked against the compiled epoch, so only a compiled scenario moves; the
+   offset, zone, daylight saving and calendar move only with a recompile.
 
 The utc_datetime must be the civil instant minus the offset; the commonest error — the offset applied
 in the wrong direction — is refused and named.
@@ -291,8 +298,10 @@ leaves the post. How to author one well:
   with its `type` and `definition`, and give the values on the instance (check 56): `expected_tower`
   is the tower's area of interest and `expected_shift_start`, declared `time`, the shift change
   `d4 07:00`, written as the guard's own departure is. The plan carries it as
-  `{"seconds": 345600.0, "civil": "2026-10-03T07:00:00+03:30"}`. The empty place reaches the record
-  as a magnitude of the vehicle's label, never as a label of its own.
+  `{"seconds": 345600.0, "civil": "2026-10-03T07:00:00+03:30"}`; a run's manifest writes `civil` again
+  on the run's epoch, so under `--epoch-at 2026-10-22T17:40:00Z` it reads `2026-10-26T21:10:00+03:30`.
+  The empty place reaches the record as a magnitude of the vehicle's label, never as a label of its
+  own.
 - **Anchor the interval to the vehicle's own events**: `{"start": "stop:0", "end": "stop_end:0"}` spans
   the parked shift from when SUMO has it arrive to when it leaves (check 58). The instance has one
   participant, with role `subject` (checks 19, 50).

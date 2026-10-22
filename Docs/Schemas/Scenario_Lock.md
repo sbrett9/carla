@@ -39,8 +39,12 @@ A capture run writes `run.lock.json` about one run of the scenario (see [Run loc
 - The co-simulation session reads it as it starts, under `carla-capture` and `carla-drive` alike: the lock beside the `.sumocfg` it is given.\
   It refuses a scenario whose configuration, route file, network, lane closures or supervision plan is not the one the lock digests.\
   It also refuses a scenario whose catalog or epoch is not the one the lock records.\
+  A run that moves simulated second zero is checked against the epoch it moves, which must be the lock's.\
   A scenario with no lock beside it still runs.\
-  The run records it as uncompiled.
+  The run records it as uncompiled.\
+  A run that moves simulated second zero on such a scenario is refused.
+- `carla-drive --epoch-at` without `--epoch` reads the lock's `epoch` and `illumination` before it connects.\
+  It moves that epoch and takes that illumination as the sun's policy, which its sun flags override field by field.
 
 ## Fields
 
@@ -88,12 +92,12 @@ Every field is always present, except `producer` in a file written before Octobe
 | `traffic.routed_by.release_agreement` | `SameRelease`, `NotRecorded`, `MismatchAccepted` or `Mismatch` | | Whether the router's release is the world converter's (check 6). |
 | `traffic.routed_by.mismatch_accepted` | boolean | | Whether a different release was accepted with `--allow-sumo-version-mismatch`. |
 | `dry_run` | object | | What a SUMO-only run of the compiled files showed (check 59). See below. |
-| `epoch` | object | | The epoch, keys sorted. See [Epoch](Epoch.md). |
+| `epoch` | object | | The epoch, keys sorted. See [Epoch](Epoch.md). A run that moves simulated second zero moves this epoch and is checked against it. |
 | `epoch_block_sha256` | string, 64 hex digits | | SHA-256 of the epoch. |
 | `illumination` | object | | The specification's illumination default, as written. An empty object where the specification declares none. The policy is then the default, `advance` at a rate of 1.0. A capture's resolution report then names the tool default as the policy's layer. |
-| `capture_windows` | array | | Each declared window: `id`, `begin_s`, `end_s` (simulated seconds), `civil_begin`, `civil_end` and `civil_date`. |
+| `capture_windows` | array | | Each declared window: `id`, `begin_s`, `end_s` (simulated seconds), `civil_begin`, `civil_end` and `civil_date`. The civil times are the compiled epoch's. A run that moves simulated second zero states its window's civil times on its own epoch, in its launch echo and its run manifest. |
 | `ephemeris` | string | | What computes the sun. |
-| `illumination_label_association` | object | | The headline of check 41: `normalized_mutual_information` (or null), `bands` (route entries by illumination band and supervision state, or null) and `entries`. |
+| `illumination_label_association` | object | | The headline of check 41: `normalized_mutual_information` (or null), `bands` (route entries by illumination band and supervision state, or null) and `entries`. It is computed under the compiled epoch's sun. A run that moves simulated second zero is lit by another sun. Nothing computes the statistic for that run. |
 
 `dry_run` takes one of two forms:
 

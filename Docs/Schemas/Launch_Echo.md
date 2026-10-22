@@ -26,7 +26,8 @@ Before any time is spent, the echo shows you a run that is not the one you meant
 
 Every figure comes from the code that will act on it.\
 Where the run moves simulated second zero with `scenario.epoch_at`, the civil span and the sun are on the moved epoch.\
-The echo then names the instant and both epochs, and the terminal shows an `epoch` line.\
+The echo then names the instant and both epochs.\
+At the terminal, an `epoch` line says the same.\
 The echo also says what it cannot predict, in `not_predicted`: for example the wall-clock duration and how many vehicles will be drawn.
 
 ## Writers and readers
@@ -155,7 +156,8 @@ Shortened from a real run:
 
 This page describes version 1, the only version.\
 An echo written before a run could move simulated second zero has no `civil.epoch_block_sha256`, `civil.scenario_epoch_block_sha256` or `civil.epoch_at`.\
-Its civil times are on the scenario's epoch, and it is still version 1.\
+Its civil times are on the scenario's epoch.\
+It is still version 1.\
 No tool reads the echo back from a file.\
 If you write a reader, have it read version 1.\
 Have it refuse a newer version rather than read it in part.

@@ -141,7 +141,8 @@ A run is resolved from six layers, lowest first:
 A higher layer wins.\
 The world and scenario packages bind some fields, such as the epoch, the SUMO step, the SUMO seed and the world's fingerprint.\
 A bound field can be restated only with the value the package gives.\
-Any other value is refused (run check 3).
+Any other value is refused (run check 3).\
+To run the scenario's traffic at another civil time, keep the epoch and move simulated second zero (see [Moving simulated second zero](#moving-simulated-second-zero)).
 
 **How `scenario_package` is found.**\
 A scenario id, such as `Arapahoe_I25_SupervisionCheck`, is looked up as `<id>/<id>.lock.json` under the site profile's `paths.scenario_root`.\
@@ -176,6 +177,7 @@ The `--set` options are applied in the order given:
 | `--caller-label VALUE` | `caller_label` | any label, recorded and never read |
 | `--result VALUE` | `result_path` | where the run result is written |
 | `--solar {freeze_at_window_start,advance,freeze_at,ignore}` | `solar.policy` | overrides the scenario's sun policy, or the default where the scenario declares none. The override is recorded. |
+| `--epoch-at VALUE` | `scenario.epoch_at` | a UTC date and time, such as `2026-10-22T17:40:00Z`, that simulated second zero is moved to. See [Moving simulated second zero](#moving-simulated-second-zero). |
 | `--collision-detail {on,off}` | `collision_detail` | `on` prints every collision. The record is complete either way. |
 
 The other options:
@@ -485,6 +487,45 @@ It takes three forms:
 
 If you leave the window out, the refusal names the scenario's declared windows: `'capture.window' has no value and no default. Supply it with --window, or name one of the scenario's declared windows: dwell_golden, stop_day`.\
 The launch echo shows the window's civil times.
+
+### Moving simulated second zero
+
+The scenario's epoch says what civil instant simulated second zero is.\
+`scenario.epoch_at`, or `--epoch-at`, moves that instant for one run without recompiling the scenario.\
+Give it a UTC date and time, such as `2026-10-22T17:40:00Z`.\
+The `Z` may be left off.\
+An offset other than zero is refused (run check 13).\
+The run shows the instant at the scenario's own offset.
+
+SUMO runs the same traffic, second for second.\
+The window is the same span of simulated seconds.\
+The window's civil times, the sun and every other civil time the run records follow the new second zero.\
+These include each still's name and stamps, the world truth track and the run manifest.
+
+Bahonar's second zero is 07:00 at +03:30 on 29 September.\
+This validates the escort window with second zero at 17:40 UTC on 22 October, 21:10 at the port:
+
+```sh
+carla-capture --site-profile site.json --run Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife.escort_drydock_d3.run.json --set paths.scenario_root=Scenarios/Bahonar --set paths.world_package_root=Scenarios/Bahonar --epoch-at 2026-10-22T17:40:00Z --validate-only
+```
+
+The window opens 3 d 03:27:00 after second zero.\
+The launch echo shows it at 00:37 on 26 October, at night:
+
+```text
+  civil       2026-10-26T00:37:00+03:30  ->  2026-10-26T00:43:00+03:30
+  epoch       moved at run time to 2026-10-22T17:40:00Z by scenario.epoch_at, from the compiled epoch f1ba0ddab35f: t = 0 is 2026-10-22T21:10:00+03:30 (2026-10-22T17:40:00Z), UTC+03:30, calendar advances, Asia/Tehran
+  sun         elevation -68.32 deg -> -67.27 deg (refraction_corrected), night -> night    policy: advance, rate 1
+```
+
+Under the compiled epoch, the same window is 10:27 to 10:33 on 2 October, in daylight.
+
+Only the instant moves.\
+The epoch keeps its offset, daylight saving, zone and calendar.\
+`scenario.epoch` stays the compiled epoch, which the session checks the scenario lock against.\
+The run manifest records both epochs.\
+The run's epoch is in `solar.epoch` and the compiled one in `solar.epoch_moved_from`.\
+`run.effective.json` carries `scenario.epoch_at`, so a repeat of the run is on the same moved clock.
 
 ### The prewarm
 

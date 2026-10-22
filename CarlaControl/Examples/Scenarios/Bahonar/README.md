@@ -104,8 +104,11 @@ A planted event's interval starts at the vehicle's own departure or at its stop.
 The run records the times each interval opened and closed.\
 The label of the guard who parks elsewhere carries two values.\
 Its `expected_tower` is `tower_03`, the tower it was due at.\
-Its `expected_shift_start` is `2026-10-03T07:00:00+03:30`, the start of that shift.\
-So the empty tower reaches the record as a value on that guard's label.
+Its `expected_shift_start` is the start of that shift, 07:00 on 3 October.\
+So the empty tower reaches the record as a value on that guard's label.\
+The supervision plan holds the shift start as a time: `{"seconds": 345600.0, "civil": "2026-10-03T07:00:00+03:30"}`.\
+The run manifest works out the local time again from the seconds, on the run's clock.\
+In a run that moves simulated second zero with `--epoch-at`, the shift start reads at the moved time.
 
 Each vehicle record in a truth sidecar, the XML truth file beside each still, carries the vehicle's SUMO id and its supervision state.\
 [Behavioral annotations](../../../../Docs/EPOL/Behavioral_Annotations.md) explains how to read them.

@@ -570,6 +570,8 @@ The compiler resolves it as it resolves an interval's begin.\
 It refuses a value that does not resolve (check 47).\
 The supervision plan carries the value as its seconds and its civil instant.\
 In the example, `expected_time` compiles to `{"seconds": 5400.0, "civil": "2026-05-12T09:00:00-06:00"}`.\
+The run manifest writes the civil instant again from the seconds, on the run's epoch.\
+So the value moves with a run that moves simulated second zero (`--epoch-at`).\
 A time given to a `string` parameter stays text.
 
 `hard_negative_for` on a term is copied onto every nominal subject that carries the term.\
@@ -922,6 +924,13 @@ carla-drive --scenario Import/Arapahoe_I25_SupervisionCheck.sumocfg --world-pack
   `--end SECOND` stops it instead after the SUMO step that simulated second falls in.
 - `--warm-up SECONDS` runs SUMO ahead to that second before the first CARLA tick, so the view starts near the part you want to see.\
   The resolution report gives each time in seconds.
+- `--epoch-at INSTANT` moves simulated second zero for this run to a UTC date and time, such as `2026-10-22T17:40:00Z`.\
+  SUMO runs the same traffic.\
+  The sun and every civil time the drive records follow the new second zero.\
+  The run shows the instant at the epoch's own offset.\
+  Without `--epoch`, the drive moves the epoch in the scenario's compile lock and takes the lock's illumination.\
+  With `--epoch`, that file's epoch must be the lock's.\
+  See [Epoch](../Schemas/Epoch.md#moving-simulated-second-zero-for-one-run).
 
 Pausing the `sumo-gui` window pauses the drive.\
 Closing it stops the run.
