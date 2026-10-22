@@ -130,7 +130,7 @@ class SunDeclaration:
         if self.epoch is None:
             if not isinstance(package.epoch, dict):
                 raise SystemExit(f"--epoch-at: the compile lock {lock_path} records no epoch to move. "
-                                 "Recompile the scenario, or give --epoch FILE.")
+                                 "Recompile the scenario.")
             self.epoch = package.epoch
             self._refuse_unless_it_conforms(self.epoch, f"the epoch object of {lock_path}")
             # An empty object is the lock's record of a specification that declares no policy.
