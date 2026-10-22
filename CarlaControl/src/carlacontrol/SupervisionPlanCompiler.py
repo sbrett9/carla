@@ -24,11 +24,13 @@ explicitly as `unlabelled`, because a missing element must not stand for an asse
 
 **A row says nothing its terms do not define.** A row's `parameters` are keys its labels' terms
 declare, each of the declared type (check 56), so a magnitude reaches a consumer with its unit and
-meaning. A nominal row carries a copy of its terms' `hard_negative_for`, which an author may restate
-and never vary (check 57): the term is the authority and the row a projection of it, and
-`null` there means unspecified, not a negative for nothing. A term's `exemplar_instances` and its
-`counterfactual` name subjects of this plan, by the authored names an instance's own counterfactual
-uses, and each must resolve (check 8).
+meaning. A `time` parameter is written as any time a specification takes, resolved as an interval's
+begin is (check 47), and carried as `{"seconds", "civil"}`: the second is what a reader re-derives
+the civil instant from under another epoch. A nominal row carries a copy of its terms'
+`hard_negative_for`, which an author may restate and never vary (check 57): the term is the
+authority and the row a projection of it, and `null` there means unspecified, not a negative for
+nothing. A term's `exemplar_instances` and its `counterfactual` name subjects of this plan, by the
+authored names an instance's own counterfactual uses, and each must resolve (check 8).
 
 **An interval is declared by a civil begin or by an anchor** (check 58). An anchor names the
 events of its participant that commit the interval's start and, where given, its end -- `depart`,
@@ -38,8 +40,9 @@ seconds are only what those events declare, so an interval over a `duration` sto
 and no declared start. An unanchored interval has no committing event: it keeps its
 declared seconds and closes on its declared end.
 
-The plan carries no solar field and no epoch: intervals carry their declared seconds and the
-civil instant the epoch names them, which is a statement of *when*, not of what the light was.
+The plan carries no solar field and no epoch: intervals and `time` parameters carry their declared
+seconds and the civil instant the epoch names them, which is a statement of *when*, not of what the
+light was.
 """
 from __future__ import annotations
 
@@ -162,8 +165,7 @@ class SupervisionPlanCompiler:
         if supervision == "annotated" and not labels:
             self.findings.refuse(18, where, "is annotated and carries no label; an annotation "
                                  "names what the author asserts")
-        parameters = dict(entry.get("parameters", {}))
-        self.vocabulary.check_parameters(parameters, labels, where)
+        parameters = self._parameters(entry, labels, where)
         hard_negative_for = self._hard_negatives(entry, supervision, labels, where)
 
         rows = []
@@ -375,8 +377,7 @@ class SupervisionPlanCompiler:
         elif labels:
             self.findings.refuse(18, where, "is unlabelled and carries labels; an unlabelled "
                                  "subject asserts nothing")
-        parameters = dict(entry.get("parameters", {}))
-        self.vocabulary.check_parameters(parameters, labels, where)
+        parameters = self._parameters(entry, labels, where)
         hard_negative_for = self._hard_negatives(entry, supervision, labels, where)
         length = self.resolver.duration(entry["slot_length"], f"{where} slot_length")
         aoi_by_subject = entry["slot_aoi_refs"]
@@ -446,8 +447,7 @@ class SupervisionPlanCompiler:
                 self.vocabulary.check_labels(labels, "cohort", where)
             elif labels:
                 self.findings.refuse(18, where, "is unlabelled and carries labels")
-            parameters = dict(entry.get("parameters", {}))
-            self.vocabulary.check_parameters(parameters, labels, where)
+            parameters = self._parameters(entry, labels, where)
             by_flow[flow] = {"flow_id": flow, "supervision": supervision, "labels": labels,
                              "parameters": parameters}
         return [by_flow.get(flow, {"flow_id": flow, "supervision": "unlabelled", "labels": [],
@@ -522,6 +522,18 @@ class SupervisionPlanCompiler:
                                      f"'{spelled}' exemplar_instances names '{ref}', which is no "
                                      f"instance of this scenario{hint}. An exemplar resolves or it "
                                      "is prose")
+
+    def _parameters(self, entry: dict, labels: list[str], where: str) -> dict:
+        """A row's parameters, checked against its labels' terms (check 56), each `time` one
+        resolved as an interval's begin is and written as `{"seconds", "civil"}`. One that does not
+        resolve is refused and stays as written, in a plan a refused compile never writes."""
+        parameters = dict(entry.get("parameters", {}))
+        self.vocabulary.check_parameters(parameters, labels, where)
+        for key in self.vocabulary.time_parameters(parameters, labels):
+            resolved = self.resolver.instant(parameters[key], f"{where} parameter {key}")
+            if resolved is not None:
+                parameters[key] = {"seconds": resolved.seconds, "civil": resolved.civil}
+        return parameters
 
     def _hard_negatives(self, entry: dict, supervision: str, labels: list[str],
                         where: str) -> list[str] | None:

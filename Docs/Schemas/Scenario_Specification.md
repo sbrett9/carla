@@ -175,11 +175,16 @@ A place takes exactly one of these forms:
 | `...terms[].definition` | string | yes | What it means. |
 | `...terms[].applies_to` | array of `entity`, `cohort` | yes | What it can label: one authored vehicle, or every vehicle of a flow. |
 | `...terms[].since`, `status` | integer, then `active` or `deprecated` | yes | The namespace version it appeared in and its state. |
-| `...terms[]` other fields | | no | `superseded_by`, `broader`, `parameters` (key to `type`, `unit`, `definition`), `counterfactual`, `contrast_with`, `hard_negative_for`, `exemplar_instances`. |
+| `...terms[].parameters` | object of key to `type`, `unit`, `definition` | no | The keys a subject carrying the term can give values for. `type` is `number`, `integer`, `string`, `boolean` or `time`. `unit` is optional. |
+| `...terms[]` other fields | | no | `superseded_by`, `broader`, `counterfactual`, `contrast_with`, `hard_negative_for`, `exemplar_instances`. |
 | `supervision.instances[]` | object | no | An assertion about one or more actors: `name`, `supervision` (`annotated` or `nominal`), `labels` and `participants` (`actor`, `role`). It can also have `intervals`, `aoi_refs`, `parameters`, `hard_negative_for` and `counterfactual`. |
 | `supervision.instances[].intervals[]` | object | no | A phase: `participant` and `phase`. It also has `begin` with `end` or `duration`, or it has an `anchor`. The anchor names the participant's events (`depart`, `stop:<i>`, `stop_end:<i>`, `phase:<i>`). Never both (check 58). |
 | `supervision.cohorts[]` | object | no | A flow's whole-life label: `flow`, `supervision` (`annotated`, `unlabelled` or `nominal`, which is refused), `labels`, `parameters`. |
 | `supervision.series[]` | object | no | A schedule read as a recurring series: `series_id`, `rota`, `member_role`, `slot_length`, `slot_aoi_refs` and `supervision`. It can also have `labels`, `parameters` and `hard_negative_for`. |
+| `...parameters.<key>` | number, string, boolean or time | no | A value for a key one of the subject's labels declares, of the declared type (check 56). A `time` value is written in any of the time forms above and resolved as an interval's begin is (check 47). |
+
+A `time` parameter reaches the supervision plan as its seconds and its civil instant (see [Supervision plan](Supervision_Plan.md#a-time-parameters-value)).\
+A time given to a `string` parameter stays text.
 
 Every actor that no instance names is written into the supervision plan as `unlabelled`.\
 So is every flow that no cohort names.\
@@ -229,4 +234,6 @@ carla-compile-scenario street_layout_minimal.scenario.json --out-dir Build/scena
 ## Versions
 
 This page describes version 1, the only version.\
-The compiler refuses a specification with no `spec_version` or any other value (check 53).
+The compiler refuses a specification with no `spec_version` or any other value (check 53).\
+A specification written before October 22, 2026 declares no `time` parameter.\
+It is still version 1.

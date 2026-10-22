@@ -45,6 +45,9 @@ Two compiles of one specification therefore write byte-for-byte identical plans.
   It refuses a plan whose digests do not match the files it runs.\
   During the run, it reports each interval opening and closing in the run manifest.\
   Each still's sidecar carries the supervision of its own frame.
+- The session repeats the plan's rows in the run manifest (see [Run manifest](Run_Manifest.md)).\
+  There it re-derives an interval's civil times and a `time` parameter's `civil` from their seconds under the run's epoch, so they read on the run's clock.\
+  It writes a slot in seconds only.
 - The scenario resolution report repeats the plan's rows (see [Scenario resolution report](Scenario_Resolution_Report.md)).
 
 ## Fields
@@ -75,7 +78,7 @@ Two compiles of one specification therefore write byte-for-byte identical plans.
 | `instance_id` | string | `<scenario_id>/<authored name>`. |
 | `supervision` | `annotated` or `nominal` | What the instance asserts. |
 | `labels` | array of terms | The labels, each a term `namespace:name`. |
-| `parameters` | object | Values for keys the labels' terms declare, each of its declared type (check 56). |
+| `parameters` | object | Values for keys the labels' terms declare, each of its declared type (check 56). A `time` parameter's value is an object (see [A time parameter's value](#a-time-parameters-value)). |
 | `hard_negative_for` | array of terms, or null | On a nominal instance, the terms it is a matched negative for, copied from its labels' terms. Null means not specified, not "a negative for nothing". |
 | `counterfactual` | object or null | `{kind, ref}`: the series, cohort, instance or term this one is the counterfactual of. |
 | `aoi_refs` | array of strings | Areas of interest the instance is about. |
@@ -108,6 +111,22 @@ The run manifest records them.
 | `supervision` | `annotated`, `nominal` or `unlabelled` | What each slot asserts. |
 | `labels`, `parameters`, `hard_negative_for` | as an instance's | |
 | `slots` | array | One per vehicle the schedule sends: `slot_key`, `aoi_ref`, `declared_start_s`, `declared_start_civil`, `declared_end_s`, `declared_end_civil` and `entity_id`. A skipped occasion has no slot. |
+
+### A time parameter's value
+
+A term can declare a parameter of type `time`.\
+The specification gives its value as a time in any of the forms a time takes (see [Scenario specification](Scenario_Specification.md#fields)).\
+The compiler resolves it as it resolves an interval's begin.\
+It refuses a value that does not resolve (check 47).\
+On an instance, a series or a cohort, the plan carries it as this object:
+
+| Field | Type | Unit | Meaning |
+|---|---|---|---|
+| `seconds` | number | s | The instant in simulated seconds from second zero. |
+| `civil` | string | | The same instant in civil time, ISO 8601 with the epoch's offset. |
+
+Every civil time in the plan is the compiled epoch's.\
+That holds for an interval's `declared_start_civil` and `declared_end_civil`, for a slot's and for a `time` parameter's `civil`.
 
 ## Example
 
@@ -151,4 +170,6 @@ Shortened:
 
 This page describes version 1, the only version.\
 The co-simulation session reads only version 1.\
-It refuses any other version, including a plan with no version, because a field that moved silently is worse than one that is absent.
+It refuses any other version, including a plan with no version, because a field that moved silently is worse than one that is absent.\
+A plan compiled before October 22, 2026 has no `time` parameter.\
+It is still version 1.

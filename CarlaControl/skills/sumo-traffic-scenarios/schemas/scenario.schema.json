@@ -1017,8 +1017,10 @@
                   "number",
                   "integer",
                   "string",
-                  "boolean"
-                ]
+                  "boolean",
+                  "time"
+                ],
+                "description": "A time parameter's value is written as any time is, and the supervision plan carries it as {seconds, civil}"
               },
               "unit": {
                 "type": "string"
@@ -1165,6 +1167,44 @@
         "ref": {
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "parameter_time": {
+      "description": "A time parameter's value written as {instant|at, plus}. Resolved by CivilTimeResolver",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instant": {
+          "type": "string"
+        },
+        "at": {
+          "description": "A time: seconds, 'dN HH:MM[:SS]', 'HH:MM[:SS]', an ISO-8601 instant with its offset, or {instant|at, plus}. Resolved by CivilTimeResolver",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "plus": {
+          "description": "Seconds, or '[Nd][Nh][Nm][Ns]'",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
         }
       }
     },
@@ -1319,7 +1359,7 @@
                 }
               },
               "parameters": {
-                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56). A time parameter's value is a time in any of its forms, resolved by CivilTimeResolver (check 47)",
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1331,6 +1371,9 @@
                     },
                     {
                       "type": "boolean"
+                    },
+                    {
+                      "$ref": "#/$defs/parameter_time"
                     }
                   ]
                 }
@@ -1378,7 +1421,7 @@
                 }
               },
               "parameters": {
-                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56). A time parameter's value is a time in any of its forms, resolved by CivilTimeResolver (check 47)",
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1390,6 +1433,9 @@
                     },
                     {
                       "type": "boolean"
+                    },
+                    {
+                      "$ref": "#/$defs/parameter_time"
                     }
                   ]
                 }
@@ -1460,7 +1506,7 @@
                 }
               },
               "parameters": {
-                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56)",
+                "description": "Keys a label's term declares in its parameters{}, each value of the declared type (check 56). A time parameter's value is a time in any of its forms, resolved by CivilTimeResolver (check 47)",
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1472,6 +1518,9 @@
                     },
                     {
                       "type": "boolean"
+                    },
+                    {
+                      "$ref": "#/$defs/parameter_time"
                     }
                   ]
                 }

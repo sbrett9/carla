@@ -347,8 +347,12 @@ carries none, and the compiler refuses a route file carrying anything but the ve
   the model trainer, and this pipeline carries it without judging it. Ask for the author's words.
 - **A subject's magnitudes go in `parameters`** — on an instance, a series or a cohort — and
   each key must be declared in the `parameters{}` of one of its labels' terms, with a `type`
-  (`number`, `integer`, `string`, `boolean`), a `unit` where it has one and a `definition`. An
+  (`number`, `integer`, `string`, `boolean`, `time`), a `unit` where it has one and a `definition`. An
   undeclared key, or a value of another type, is refused (check 56); there is no free-form attribute map.
+- **A parameter that names a time is declared `time`**, and its value is written as any other time:
+  `"d4 07:00"`, `{"instant": "name"}`, `{"at": …, "plus": …}`. The compiler resolves it as it resolves
+  an interval's begin (check 47), and the plan carries `{"seconds": …, "civil": …}`. Never write a
+  computed civil string into a `string` parameter instead: it stays text, and nothing reads it as a time.
 - A term carried by `nominal` subjects may declare `hard_negative_for`; the plan copies it onto them, so
   restate it on a subject only exactly, or not at all (check 57). A term's `exemplar_instances` name
   instances of this scenario by their authored names, and each must resolve (check 8).

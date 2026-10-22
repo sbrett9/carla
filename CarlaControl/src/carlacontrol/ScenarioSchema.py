@@ -56,11 +56,21 @@ _DURATION = {"description": "Seconds, or '[Nd][Nh][Nm][Ns]'",
              "anyOf": [{"type": "number", "minimum": 0}, {"type": "string", "minLength": 1}]}
 _STRINGS = {"type": "array", "items": {"type": "string", "minLength": 1}}
 _TERMS = {"type": "array", "items": {"type": "string", "pattern": _TERM}}
+TIME_TYPE = "time"
+# A composite time is closed here, where `_TIME` leaves it open, so that a parameter given some other
+# object is still refused for its shape (check 53) whatever type its term declares.
+_PARAMETER_TIME = {"description": "A time parameter's value written as {instant|at, plus}. "
+                                  "Resolved by CivilTimeResolver",
+                   "type": "object", "additionalProperties": False,
+                   "properties": {"instant": {"type": "string"}, "at": _TIME,
+                                  "plus": _DURATION}}
 _PARAMETERS = {"description": "Keys a label's term declares in its parameters{}, each value of the "
-                              "declared type (check 56)",
+                              "declared type (check 56). A time parameter's value is a time in "
+                              "any of its forms, resolved by CivilTimeResolver (check 47)",
                "type": "object",
                "additionalProperties": {"anyOf": [{"type": "number"}, {"type": "string"},
-                                                  {"type": "boolean"}]}}
+                                                  {"type": "boolean"},
+                                                  {"$ref": "#/$defs/parameter_time"}]}}
 _HARD_NEGATIVE_FOR = ("Optional, and only on a nominal subject: the set its labels' terms declare, "
                       "restated exactly (check 57). The plan copies it from the terms either way")
 
@@ -328,7 +338,11 @@ SCHEMA: dict = {
                 "parameters": {"type": "object", "additionalProperties": {
                     "type": "object", "additionalProperties": False,
                     "required": ["type", "definition"],
-                    "properties": {"type": {"enum": ["number", "integer", "string", "boolean"]},
+                    "properties": {"type": {"enum": ["number", "integer", "string", "boolean",
+                                                     TIME_TYPE],
+                                            "description": "A time parameter's value is written "
+                                                           "as any time is, and the supervision "
+                                                           "plan carries it as {seconds, civil}"},
                                    "unit": {"type": "string"},
                                    "definition": {"type": "string", "minLength": 1}}}},
                 "counterfactual": {"$ref": "#/$defs/counterfactual"},
@@ -371,6 +385,7 @@ SCHEMA: dict = {
             "properties": {"kind": {"enum": ["series", "cohort", "instance", "term"]},
                            "ref": {"type": "string", "minLength": 1}},
         },
+        "parameter_time": _PARAMETER_TIME,
         "interval": {
             "description": "Declared by a civil begin, with an end or a duration, or by an anchor; "
                            "never both (check 58)",

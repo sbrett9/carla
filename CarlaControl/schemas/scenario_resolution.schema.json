@@ -2546,13 +2546,20 @@
         "parameters": {
           "type": "object",
           "additionalProperties": {
-            "type": [
-              "number",
-              "string",
-              "boolean"
+            "anyOf": [
+              {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/$defs/time_parameter"
+              }
             ]
           },
-          "description": "Values for keys the labels' terms declare."
+          "description": "Values for keys the labels' terms declare; a time parameter's is its second and civil instant."
         },
         "hard_negative_for": {
           "anyOf": [
@@ -2821,13 +2828,20 @@
         "parameters": {
           "type": "object",
           "additionalProperties": {
-            "type": [
-              "number",
-              "string",
-              "boolean"
+            "anyOf": [
+              {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/$defs/time_parameter"
+              }
             ]
           },
-          "description": "Values for keys the labels' terms declare."
+          "description": "Values for keys the labels' terms declare; a time parameter's is its second and civil instant."
         },
         "hard_negative_for": {
           "anyOf": [
@@ -2952,13 +2966,20 @@
         "parameters": {
           "type": "object",
           "additionalProperties": {
-            "type": [
-              "number",
-              "string",
-              "boolean"
+            "anyOf": [
+              {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/$defs/time_parameter"
+              }
             ]
           },
-          "description": "Values for keys the labels' terms declare."
+          "description": "Values for keys the labels' terms declare; a time parameter's is its second and civil instant."
         },
         "hard_negative_for": {
           "anyOf": [
@@ -3011,13 +3032,20 @@
         "parameters": {
           "type": "object",
           "additionalProperties": {
-            "type": [
-              "number",
-              "string",
-              "boolean"
+            "anyOf": [
+              {
+                "type": [
+                  "number",
+                  "string",
+                  "boolean"
+                ]
+              },
+              {
+                "$ref": "#/$defs/time_parameter"
+              }
             ]
           },
-          "description": "Values for keys the labels' terms declare."
+          "description": "Values for keys the labels' terms declare; a time parameter's is its second and civil instant."
         }
       },
       "additionalProperties": false
@@ -3050,6 +3078,25 @@
           "items": {
             "type": "string"
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "time_parameter": {
+      "type": "object",
+      "description": "A time parameter's value.",
+      "required": [
+        "seconds",
+        "civil"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "number",
+          "description": "Simulated seconds from t = 0."
+        },
+        "civil": {
+          "type": "string",
+          "description": "The civil instant the compiled epoch names it, ISO 8601 with the epoch's offset."
         }
       },
       "additionalProperties": false
