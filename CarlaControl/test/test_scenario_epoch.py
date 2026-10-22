@@ -5,7 +5,9 @@ its rules, so a scenario the compiler accepts is one the session accepts, with t
 same civil instant for every simulated second. These tests pin that delegation from the outside: the
 rules fire (check 33 and check 34, each attributed), the digest is the one Python's canonical form
 gives, a half-hour or quarter-hour offset is ordinary, and a zone name is carried without ever being
-resolved.
+resolved. A run's move of simulated second zero is `SolarEpoch`'s too: Bahonar moved to 17:40 UTC is
+21:10 at its own +03:30 with everything else kept, an instant at another offset is refused, and a move
+to the epoch's own instant moves nothing.
 """
 from __future__ import annotations
 
@@ -141,3 +143,80 @@ def test_the_inverse_of_civil_instant_at_agrees_with_it():
     seconds = read.seconds_at(instant)
     assert seconds == 25 * 3600
     assert read.civil_instant_at(seconds) == "2026-03-22T07:00:00+03:30"
+
+
+# -- moving simulated second zero for one run ------------------------------------------------------
+
+# The shipped Bahonar pattern of life's compiled epoch, as its compile lock records it.
+BAHONAR_COMPILED = {
+    "calendar_advances": True,
+    "civil_datetime": "2026-09-29T07:00:00+03:30",
+    "dst_in_effect": False,
+    "epoch_version": 1,
+    "note": "Shahid Bahonar Port, Bandar Abbas: simulated second zero is 07:00 local time on 29 "
+            "September 2026, the first morning shift change; the civil date advances",
+    "time_zone_id": "Asia/Tehran",
+    "utc_datetime": "2026-09-29T03:30:00Z",
+    "utc_offset_hours": 3.5,
+}
+BAHONAR_COMPILED_DIGEST = "f1ba0ddab35f800a4b78ebc902fa9a1dd9d47a64fee72eb3cfab687969bbecdf"
+
+
+def test_bahonar_moved_to_17_40_utc_is_21_10_local_and_keeps_the_rest():
+    compiled = ScenarioEpoch.read(BAHONAR_COMPILED)
+    assert compiled.digest == BAHONAR_COMPILED_DIGEST
+    moved = compiled.moved_to("2026-10-22T17:40:00Z", "--epoch-at")
+    assert moved.declaration == {
+        **BAHONAR_COMPILED,
+        "civil_datetime": "2026-10-22T21:10:00+03:30",
+        "utc_datetime": "2026-10-22T17:40:00Z",
+        "note": "Simulated second zero moved at run time to 2026-10-22T21:10:00+03:30 from "
+                f"2026-09-29T07:00:00+03:30, the epoch {BAHONAR_COMPILED_DIGEST}.",
+    }
+    # The digest is the Python canonical form's, as every record names an epoch.
+    canonical = json.dumps(moved.declaration, sort_keys=True, indent=2)
+    assert moved.digest == hashlib.sha256(canonical.encode("utf-8")).hexdigest() \
+        == "59f0d5a8bb8bbe38a03880bc02f902cfefcad4bade22cb722da313c292d5fbd8"
+    assert moved.utc_datetime == "2026-10-22T17:40:00Z"
+    assert moved.civil_instant_at(271169) == "2026-10-26T00:29:29+03:30"
+
+
+@pytest.mark.parametrize("instant", ["2026-10-22T17:40:00", "2026-10-22T17:40:00+00:00",
+                                     "2026-10-22T17:40:00-00:00"])
+def test_an_instant_without_the_z_or_at_a_zero_offset_is_the_same_move(instant):
+    compiled = ScenarioEpoch.read(BAHONAR_COMPILED)
+    assert compiled.moved_to(instant, "--epoch-at").digest == \
+        compiled.moved_to("2026-10-22T17:40:00Z", "--epoch-at").digest
+
+
+def test_an_instant_at_another_offset_is_refused_naming_it_in_utc():
+    with pytest.raises(ValueError) as refused:
+        ScenarioEpoch.read(BAHONAR_COMPILED).moved_to("2026-10-22T21:10:00+03:30", "--epoch-at")
+    assert str(refused.value) == (
+        "Simulated second zero is not moved: --epoch-at '2026-10-22T21:10:00+03:30' carries the "
+        "offset +03:30, and the instant is given in UTC: write it 2026-10-22T17:40:00Z.")
+
+
+@pytest.mark.parametrize("instant", ["2026-10-22 17:40", "22 October 2026", "2026-10-32T17:40:00Z"])
+def test_an_instant_that_is_no_utc_date_and_time_is_refused_naming_what_gave_it(instant):
+    with pytest.raises(ValueError) as refused:
+        ScenarioEpoch.read(BAHONAR_COMPILED).moved_to(instant, "scenario.epoch_at")
+    assert str(refused.value).startswith(
+        f"Simulated second zero is not moved: scenario.epoch_at '{instant}' ")
+
+
+def test_a_move_to_the_epoch_s_own_instant_moves_nothing():
+    compiled = ScenarioEpoch.read(BAHONAR_COMPILED)
+    unmoved = compiled.moved_to("2026-09-29T03:30:00Z", "--epoch-at")
+    assert unmoved.digest == BAHONAR_COMPILED_DIGEST
+    assert unmoved.declaration == BAHONAR_COMPILED
+
+
+def test_a_moved_epoch_keeps_an_offset_written_as_an_integer():
+    """An offset of -7 stays -7 in the moved epoch's canonical form, where -7.0 would move its digest."""
+    pacific = {"epoch_version": 1, "civil_datetime": "2026-03-21T00:00:00-07:00",
+               "utc_offset_hours": -7, "utc_datetime": "2026-03-21T07:00:00Z",
+               "calendar_advances": True, "dst_in_effect": True}
+    moved = ScenarioEpoch.read(pacific).moved_to("2026-03-22T14:00:00Z", "--epoch-at")
+    assert '"utc_offset_hours": -7\n' in moved.canonical_json
+    assert moved.civil_instant_at(0) == "2026-03-22T07:00:00-07:00"

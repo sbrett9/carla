@@ -29,10 +29,31 @@ What a run needs on disk:
     The offset is the declaration, daylight saving included -- Pacific time on 21 March is -07:00
     -- and the zone name is carried for a reader and never resolved. The epoch is required for
     every drive that renders a world, under every sun policy: every still is named and stamped
-    from the scenario's civil time, and the session refuses a drive that declares none.
+    from the scenario's civil time, and the session refuses a drive that declares none. A compiled
+    scenario's own epoch is in its compile lock, which `--epoch-at` reads without `--epoch`.
+
+`--epoch-at INSTANT` moves simulated second zero for one run without recompiling the scenario: it is
+the UTC date and time step 0 is to be, `2026-10-22T17:40:00Z`. The `Z` may be left off, and `+00:00`
+is read as it. Any other offset is refused: the instant is given in UTC, and the run shows it at the
+scenario's own offset. Only the instant moves. SUMO runs the scenario's traffic second for second as
+compiled. The run's epoch is the compiled one with its civil and UTC instants moved, its offset,
+daylight saving, zone and calendar kept, and its note naming the move. Every civil time the run states
+follows step 0: the sun, every still's name and stamps, the live feed, the world truth track, and the
+run manifest's civil times, the supervision intervals and the time-valued label values among them.
+The manifest and the session's report also name the compiled epoch. Without `--epoch`, the epoch moved
+is the one in the compile lock beside `--scenario`, and the lock's `illumination` is the sun's policy,
+with `--illumination`, `--solar-rate` and the other sun flags replacing the fields they name. With
+`--epoch`, the file's epoch must be the lock's. A scenario with no compile lock is refused, since it
+was compiled against no epoch to move. Bahonar's step 0 is 07:00 on 29 September at +03:30; from a
+distribution's folder, this drive puts it at 21:10 local on 22 October:
+
+    carla-drive \\
+        --scenario Scenarios/Bahonar/Shahid_Bahonar_Port_PatternOfLife/Shahid_Bahonar_Port_PatternOfLife.sumocfg \\
+        --world-package Scenarios/Bahonar/Shahid_Bahonar_Port.cwp --epoch-at 2026-10-22T17:40:00Z
 
 The sun advances unless the run says otherwise. With no `--illumination` and no `illumination` object
-in the `--epoch` file, the session runs under the default, `advance` at a rate of 1.0: after SUMO is
+in the `--epoch` file, or, under `--epoch-at` alone, in the compile lock, the session runs under the
+default, `advance` at a rate of 1.0: after SUMO is
 fast-forwarded and before the first tick, the sun is set to the civil instant the window opens
 (`--window-opens-at`, or the first rendered frame). From there it follows simulated time. The session
 writes it for every frame and compares each tick's sun with the declared one. The run manifest records
@@ -102,7 +123,8 @@ Linux it needs a display.
 
 A compiled scenario is checked against the compile lock the compiler wrote beside its configuration
 (`<stem>.lock.json`) before SUMO is started: its configuration, route file and network must be the
-ones the lock digests, and the catalogue and epoch given here the ones it was compiled against. A
+ones the lock digests, and the catalogue and epoch given here the ones it was compiled against, the
+epoch before `--epoch-at` moves it. A
 scenario with no lock runs and is logged as uncompiled. The lock also says whether the compiler ran the
 scenario in SUMO alone before writing it, which is what finds a vehicle the supervision plan names that
 never enters the simulation; a lock that says the run was skipped (`carla-compile-scenario
@@ -491,18 +513,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="a JSON file declaring what simulated second zero means in civil time: "
                              "the scenario's `epoch` object on its own, or a scenario.json carrying "
                              "one, whose `illumination` object is then read as well. Required for a "
-                             "drive that renders a world: every still is named and stamped from the "
-                             "scenario's civil time, and the session refuses a drive without one")
+                             "drive that renders a world, unless --epoch-at takes the compile "
+                             "lock's: every still is named and stamped from the scenario's civil "
+                             "time, and the session refuses a drive without one")
+    parser.add_argument("--epoch-at", default=None, metavar="INSTANT",
+                        help="move simulated second zero to this UTC date and time for the run, "
+                             "such as 2026-10-22T17:40:00Z, the Z optional; any other offset is "
+                             "refused. The traffic is the scenario's, unchanged; the run's epoch is "
+                             "the compiled one with its instant moved, shown at the scenario's own "
+                             "offset, so 17:40Z on Bahonar is 21:10+03:30, and the sun, the stills, "
+                             "the live feed, the world truth track and the run manifest are on it. "
+                             "Without --epoch it moves the compile lock's epoch, whose illumination "
+                             "is then the default the sun flags override; with --epoch, that file's "
+                             "epoch must be the lock's. Refused on a scenario with no compile lock")
     parser.add_argument("--illumination",
                         choices=("freeze_at_window_start", "advance", "freeze_at", "ignore"),
                         help="what the sun does across the window. Under advance the session "
                              "sets it to the civil instant the window opens. It carries the sun "
                              "forward at --solar-rate and writes it for every frame. Left out, the "
-                             "sun advances at a rate of 1.0 by default. The run manifest says so. "
-                             "Under freeze_at_window_start the session sets the sun the same way "
-                             "and holds it. Under freeze_at it holds the sun at --freeze-at. Under "
-                             "ignore it leaves the sun as the world holds it. The run then records "
-                             "that the lighting honors no epoch")
+                             "sun advances at a rate of 1.0 by default, or follows the compile "
+                             "lock's illumination under --epoch-at without --epoch. The run manifest "
+                             "says so. Under freeze_at_window_start the session sets the sun the "
+                             "same way and holds it. Under freeze_at it holds the sun at --freeze-at. "
+                             "Under ignore it leaves the sun as the world holds it. The run then "
+                             "records that the lighting honors no epoch")
     parser.add_argument("--solar-rate", type=float,
                         help="with --illumination advance: sun-clock seconds per simulated "
                              "second. 1.0 keeps the sun on civil time. Left out, the rate is 1.0")

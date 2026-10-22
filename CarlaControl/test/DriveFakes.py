@@ -153,7 +153,8 @@ def _report() -> SimpleNamespace:
         DriveLeaseRefused=None, DriveLeaseHolder="the test",
         Sumo=SimpleNamespace(Agrees=True, Installation="stand-in", Binary="sumo",
                              Verdict="agrees with the world's converter"),
-        CompileLock=SimpleNamespace(Compiled=False), Teleporting=SimpleNamespace(Enabled=False),
+        CompileLock=SimpleNamespace(Compiled=False), Epoch=None, EpochMovedFrom=None,
+        Teleporting=SimpleNamespace(Enabled=False),
         Pacing=pacing, LayerVisibility=SimpleNamespace(Keys=()), RenderSetLimits=False,
         RenderSetPolicy="every vehicle SUMO has", SumoSeed=42, DrawDistanceMetres=None,
         CameraFootprints=SimpleNamespace(Count=0, Values=()), WorstDivergence=None, PosesComputed=1)
